@@ -1,8 +1,8 @@
 ---
 title: "Matrix Completion"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -16,12 +16,12 @@ knitr::opts_chunk$set(echo = TRUE)
 Consider a $3 \times 2$ matrix $A$, where we are unable to observe one of the values:
 
 $$
-A = \left( \begin{array}{cc} 1 & ? \\ 4 & 9 \\ 3 & 7 \end{array} \right).
+A = \left( \begin{array}{cc} 1 & ? \\ 4 & 8 \\ 3 & 6 \end{array} \right).
 $$
 What would be a good guess for the missing value in $A$? This depends on how we define "good". 
-One objective would be that we want $A$ to be as "simple" as possible. Again, though, we are left with the question, what do we mean by "simple"?  In matrix algebra, one notion of simplicity is rank: "the maximal number of linearly independent columns," as per Wikipedia.  For $A$, may not that for the complete rows, we have the following formula:
+One objective would be that we want $A$ to be as "simple" as possible. Again, though, we are left with the question, what do we mean by "simple"?  In matrix algebra, one notion of simplicity is rank: "the maximal number of linearly independent columns," as per Wikipedia.  For $A$, for the complete rows, we have the following formula:
 $$
-a_{i2} = 1 + 2a_{i1}.
+a_{i2} = 2a_{i1}.
 $$
 That being the case, if we were to complete the matrix as,
 $$
@@ -35,7 +35,7 @@ rankMatrix(hatA)[1]
 ```
 Suppose that we insert any other real number value $k$, to generate $\tilde{A}(k)$. This would result in increasing the rank of $\hat{A}$ to 2:
 ```{r rank-simple-alt}
-testVals <- sample(c(-10:5, 7:10), 5)
+testVals <- sample(c(-10:1, 3:10), 5)
 rankTestRes <- rep(NA, length(testVals))
 for(i in 1:length(testVals)){
   hatA.alt <- matrix(c(1,testVals[i],4,8,3,6), ncol=2, byrow=T)
