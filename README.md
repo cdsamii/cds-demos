@@ -1,4 +1,4 @@
 # cds-demos
 
-## Matrix completion
+A repository of code for teaching demos.
 
