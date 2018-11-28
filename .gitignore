@@ -240,3 +240,12 @@ TSWLatexianTemp*
 
 # generated if using elsarticle.cls
 *.spl
+
+
+count.txt
+.Rproj.user
+.Rhistory
+.Rapp.history
+.rda
+*.DS_Store
+.RData
