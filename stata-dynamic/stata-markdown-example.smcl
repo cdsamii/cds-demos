@@ -1,0 +1,36 @@
+{smcl}
+{com}{sf}{ul off}{txt}{.-}
+      name:  {res}<unnamed>
+       {txt}log:  {res}/Users/cyrussamii/Documents/Github/cds-demos/stata-dynamic/stata-markdown-example.smcl
+  {txt}log type:  {res}smcl
+ {txt}opened on:  {res}28 Jan 2019, 16:51:12
+{txt}
+{com}. //_1
+. sysuse auto, clear
+{txt}(1978 Automobile Data)
+
+{com}. //_2
+. gen gphm = 100/mpg
+{txt}
+{com}. //_3q
+. twoway scatter gphm weight || lfit gphm weight ///
+>     , ytitle(Gallons per Mile) legend(off)
+{res}{txt}
+{com}. qui    graph export auto.png, width(500) replace
+{txt}
+{com}. //_4q
+. eststo clear
+{txt}
+{com}. qui eststo: reg gphm weight, robust 
+{txt}
+{com}. qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace
+{txt}
+{com}. //_^
+. log close
+      {txt}name:  {res}<unnamed>
+       {txt}log:  {res}/Users/cyrussamii/Documents/Github/cds-demos/stata-dynamic/stata-markdown-example.smcl
+  {txt}log type:  {res}smcl
+ {txt}closed on:  {res}28 Jan 2019, 16:51:12
+{txt}{.-}
+{smcl}
+{txt}{sf}{ul off}

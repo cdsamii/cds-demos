@@ -1,0 +1,102 @@
+---
+title: Stata Markdown Tutorial
+author: Cyrus Samii
+date: January 2019
+header-includes:
+  - \usepackage{multicol}
+  - \usepackage{tabularx}
+  - \usepackage{booktabs}
+  - \usepackage{lscape}
+---
+
+# Overview
+
+Here are some notes and examples for using Stata Markdown from German Rodriguez.
+For instructions on installation and dependencies, refer to the 
+Stata Markdown website.
+
+I give examples of some things we might want to do in social science
+related projects.
+
+# Markdown 
+
+Markdown is a simple markup language that, through Pandoc, can be rendered
+in a variety of formats, including pdf (via tex), html, or docx.  If you are used to writing latex or html, then markdown 
+will be easy, since it admits a lot of the syntax used in those languages.
+
+There are lots of cheatsheets out there, such as:
+
+<https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet>
+
+Lots of things are done very simply in Markdown. E.g., here is a 
+numbered list:
+
+1. Foo
+1. Foo 2
+1. Foo 3
+
+The header of this document is a YAML header for Markdown, 
+which contains meta instructions for the Markdown->Pandoc 
+compilation.
+
+# Workflow
+
+The way I work is to type into this document and then compile
+by running the requisite commands that I have put into a separate
+.do file called "stata-markdown-example-do.do".  That way, I can
+load the various compilation options (that is, the options to the
+`markstat` function in a way that I can easily recall them later.
+Using the `do` button in the Stata .do file editor gives me one
+button compilation. I also have my commands to set the working
+directory and also load in dependencies (e.g., the `stata.sty`
+file needed to compile to PDF). 
+
+I may also have another Stata .do file that I use as a scratch pad
+for working out the kinks of the Stata code that I then insert
+as code chunks into this document.
+
+# "Simple Script" Example
+
+Here we replicate the simple example from German Rodriguez's 
+"Simple Script" example, tweaking a few things to make
+some additional points.  
+
+First, we read the fuel efficiency data that is shipped with Stata:
+```{s}
+    sysuse auto, clear
+```
+To study how fuel efficiency depends on weight it is useful to
+transform the dependent variable from "miles per gallon" to
+"gallons per 100 miles":  
+```{s}
+    gen gphm = 100/mpg
+````
+We can then plot the relationship. We will run this code in a manner that is not
+echoed in the resulting output file (PDF, docx, etc.).
+```{s/}
+    twoway scatter gphm weight || lfit gphm weight ///
+        , ytitle(Gallons per Mile) legend(off)
+qui    graph export auto.png, width(500) replace
+```
+![Fuel Efficiency](auto.png)
+
+# Regression table with `esttab`
+
+Something that we frequently need to do is to report regression tables.
+We can use the `esttab` function in Stata and insert its output
+here:
+```{s/}
+eststo clear
+qui eststo: reg gphm weight, robust 
+qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace
+```
+\begin{center}
+\input{reg-example.tex}
+\end{center}
+
+(If you look at the Stata Markdown .stmd file, you will see that 
+I used tex commands to insert the regression table and center it.)
+
+# Summary stats with `tabout`
+
+Here I will work out a `tabout` example.
