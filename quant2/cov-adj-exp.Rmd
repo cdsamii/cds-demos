@@ -1,0 +1,179 @@
+---
+title: "Covariate Adjustment for a Randomized Experiment"
+author: "Cyrus Samii"
+date: "1/29/2019"
+output: html_document
+---
+
+# Covariate adjustment and bias
+
+We consider a randomized experiment as per Quant 2, lecture 2.
+From a large population we draw a sample of units indexed by $i=1,..,n$. For each unit we have a treatment, 
+$D_i=0,1$, potential outcomes $Y_{1i}$ and $Y_{0i}$, observed outcomes
+$Y_i = D_i Y_{1i} + (1-D_i)Y_{0i}$,
+and then a single covariate $X$. 
+The experiment uses complete random assignment of $n_1$ units to treatment ($D_i=1$) and the rest to control ($D_i=0$).
+
+We consider three estimators: (i) the simple difference in means, 
+equivalent to the OLS regression of $Y_i$ on $D_i$, 
+(ii) OLS regression of $Y_i$ on $D_i$, $X_i$ and a constant, and
+(iii) the interacted OLS regression of $Y_i$ on $D_i$, $X_i$,
+$D_iX_i$, and a constant.  Estimator (i) is unbiased, as per
+the lecture notes. Lin (2013) provides expressions for 
+the leading terms in the bias of (ii) and (iii) relative to the SATE. For (ii), we have,
+$$
+ltb(SATE)_{(ii)} = - \frac{1}{n}\frac{1}{\sigma^2_X} \lim_{n \rightarrow \infty} \frac{1}{n}\sum_{i=1}^n[\rho_i - \rho](X_i - \bar{X})^2,
+$$
+where $\sigma^2_X = (1/N)\sum_{i=1}^n(X_i - \bar{X})^2$. Then for (iii), we have
+$$
+ltb(SATE)_{(iii)} = -\frac{1}{\sigma^2_X}\left[\left(\frac{1}{n_1} - \frac{1}{n} \right) \lim_{n \rightarrow \infty} \frac{1}{n}\sum_{i=1}^n e_{1i}(X_i - \bar{X})^2 -  \left(\frac{1}{n-n_1} - \frac{1}{n} \right) \lim_{n \rightarrow \infty} \frac{1}{n}\sum_{i=1}^n e_{0i}(X_i - \bar{X})^2 \right] ,
+$$
+where $e_{di}$ is the prediction error for $Y_{di}$ from regression (iii).
+
+Examining these expressions, it is clear that the bias 
+depends strongly on the size of the sample.  In small samples, 
+the bias is driven by correlation between the squared, centered covariate values 
+and the potential outcomes/unit-level effects.
+
+# Create a Population
+
+We simulate a population with data distribution such that the
+small sample bias from the adjusted regressions 
+will be pretty bad in small samples---that is, where 
+there is strong correlation between the centered, squared
+covariate and the unit-level effects:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(xtable)
+```
+
+```{r popdata, include=TRUE}
+N <- 1000
+x <- runif(N, 0, 2)
+y0 <- .5*x - .25*(x-mean(x))^2 +.25*rnorm(N)
+y1 <- 2*y0 + .25 + (x-mean(x))^2 + .25*rnorm(N)
+index <- 1:N
+potcov <- data.frame(index, y1,y0,x)
+```
+Now plot these data:
+
+```{r popdata-plot, echo=FALSE}
+par(mfrow=c(1,2))
+yrange <- range(c(y1,y0))
+plot(x,y1, pch=19, ylim=yrange, cex=.5, col="red")
+points(x,y0, pch=19, cex=.5, col="blue")
+plot((x-mean(x))^2, (y1-y0))
+```
+
+
+# Simulation study
+
+We will see how, with such a population, the unadjusted (i)
+and then adjusted (ii, iii) regression estimators
+perform as the sample size $n$ increases. 
+Our metric will be bias measured with
+respect to the standard error:
+
+```{r sim, echo=TRUE, include=TRUE}
+# Sample sizes
+n.vec <- c(20,40,80,160,320)
+
+nsim <- 2000
+
+# vectors to store results
+sate.hat.noadj <- sate.hat.simpadj <- sate.hat.intadj <- sate <- matrix(NA, ncol=length(n.vec), nrow=nsim)
+
+for(j in 1:length(n.vec)){
+n <- n.vec[j]
+
+	for(i in 1:nsim){
+
+		# Simple random sample without replacement
+		potcov.s <- potcov[potcov$index %in% sample(potcov$index, n),]
+		
+		sate[i,j] <- mean(potcov.s$y1 - potcov.s$y0)
+		
+		# Complete random assignment of treatment
+		n1 <- floor(.33*n) 	# you can play around with treatment allocation.
+							# this is set to an imbalanced design.
+		potcov.s$D <- 0
+		potcov.s$D[potcov.s$index %in% sample(potcov.s$index, n1)] <- 1
+
+		potcov.s$Y <- with(potcov.s, D*y1 + (1-D)*y0)
+
+		# No adjustment (difference in means)
+		ols.1 <- lm(Y~D, data=potcov.s)
+
+		# Simple covariate adjustment
+		ols.2 <- lm(Y~D+x, data=potcov.s)
+
+		# Two equivalent ways of doing OLS with covariate interaction adjustment:
+		ols.3 <- lm(Y~D*I(x-mean(x)), data=potcov.s)
+		# This interacted regression uses the centered X variable.
+		# The resulting coefficient on D is the same what you would get
+		# if you ran the interacted regression without centering X, but then
+		# computed the difference in means using the predicted values from 
+		# that latter regression.  Note that in the latter regression (without
+		# centering X), the coefficient on D is not the estimate of the SATE.
+
+		sate.hat.noadj[i,j] <- coef(ols.1)["D"]
+		sate.hat.simpadj[i,j] <- coef(ols.2)["D"]
+		sate.hat.intadj[i,j] <- coef(ols.3)["D"]
+	}
+}
+
+se.sate.hat.noadj <- apply(sate.hat.noadj, 2, sd)
+bias.sate.hat.noadj <- apply(sate.hat.noadj-sate, 2, mean)
+std.bias.sate.hat.noadj <- bias.sate.hat.noadj/se.sate.hat.noadj
+
+se.sate.hat.simpadj <- apply(sate.hat.simpadj, 2, sd)
+bias.sate.hat.simpadj <- apply(sate.hat.simpadj-sate, 2, mean)
+std.bias.sate.hat.simpadj <- bias.sate.hat.simpadj/se.sate.hat.simpadj
+
+se.sate.hat.intadj <- apply(sate.hat.intadj, 2, sd)
+bias.sate.hat.intadj <- apply(sate.hat.intadj-sate, 2, mean)
+std.bias.sate.hat.intadj <- bias.sate.hat.intadj/se.sate.hat.intadj
+
+res.tab <- cbind(c("SE","Bias","Bias/SE","SE","Bias","Bias/SE","SE","Bias","Bias/SE"),
+			round(1000*rbind(	se.sate.hat.noadj,
+					bias.sate.hat.noadj,
+					std.bias.sate.hat.noadj,
+					se.sate.hat.simpadj,
+					bias.sate.hat.simpadj,
+					std.bias.sate.hat.simpadj,
+					se.sate.hat.intadj,
+					bias.sate.hat.intadj,
+					std.bias.sate.hat.intadj),0)/1000)
+res.tab.out <- cbind(c("No adjustment","","",
+						"Simple adjustment","","",
+						"Interacted adjustment","",""), res.tab)
+colnames(res.tab.out) <- c("Estimator","Statistic",paste("N=",n.vec,sep=""))
+```
+
+```{r, results='asis', echo=FALSE, include=TRUE}
+print(xtable(res.tab.out, align=rep("r", ncol(res.tab.out)+1)), 
+	include.rownames =F, 
+	type="html")
+```
+
+# Observations 
+
+Barring an unlucky run in the simuation, some things you should observe:
+
+1. The biases in the regression-adjusted estimators are usually quite small
+    relative to the standard error.  Nonetheless, these biases are non-zero,
+    whereas the unadjusted estimator is unbiased (in principle -- biases here
+    are due to the fact that the simulation runs do not exhaust all potential
+    treatment assignments).
+2. The biases are far less compelling than is the difference in the
+    standard errors, which are approximated using the empirical standard deviations
+    from the simulations.  The standard errors for the adjusted estimators are
+    smaller (in absolute and relative terms) than for the unadjusted estimator.
+
+So, this is an example of a bias-variance trade-off that is favorable for the biased
+estimators.  That is why we use regression adjustment even though we have 
+experimental data.
+
+Note as well that the specification here is linear in X, but as is clear from the scatter
+plot above this fails to capture the non-linearities.  That is no matter, though.  Regression adjustment is motivated merely by efficiency considerations here, and so even though the partial relationship between X and the outcomes is in accurate, this regression still partials away some of the variation in the outcome, yielding the efficiency gains.
