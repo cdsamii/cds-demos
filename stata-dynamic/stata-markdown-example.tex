@@ -67,6 +67,8 @@
 \usepackage{tabularx}
 \usepackage{booktabs}
 \usepackage{lscape}
+\usepackage{fullpage}
+\usepackage{pgffor}
 
 \title{Stata Markdown Tutorial}
 \author{Cyrus Samii}
@@ -78,9 +80,12 @@
 \hypertarget{overview}{%
 \section{Overview}\label{overview}}
 
-Here are some notes and examples for using Stata Markdown from German
-Rodriguez. For instructions on installation and dependencies, refer to
-the Stata Markdown website.
+Here are some notes and examples for using the Stata Markdown package.
+The Stata Markdown package was written by German Rodriguez. These notes
+offer some basic guidance on using the package. For instructions on
+installation and dependencies, refer to the Stata Markdown website:
+
+\url{https://data.princeton.edu/stata/markdown/}
 
 I give examples of some things we might want to do in social science
 related projects.
@@ -90,8 +95,9 @@ related projects.
 
 Markdown is a simple markup language that, through Pandoc, can be
 rendered in a variety of formats, including pdf (via tex), html, or
-docx. If you are used to writing latex or html, then markdown will be
-easy, since it admits a lot of the syntax used in those languages.
+docx.\\
+If you are used to writing latex or html, then markdown will be easy,
+since it admits a lot of the syntax used in those languages.
 
 There are lots of cheatsheets out there, such as:
 
@@ -113,7 +119,8 @@ numbered list:
 
 The header of this document is a YAML header for Markdown, which
 contains meta instructions for the Markdown-\textgreater{}Pandoc
-compilation.
+compilation. I am rendering this document in PDF through Tex, and so you
+will see that in my YAML header I have included some Tex instructions.
 
 \hypertarget{workflow}{%
 \section{Workflow}\label{workflow}}
@@ -138,7 +145,25 @@ chunks into this document.
 Here we replicate the simple example from German Rodriguez's ``Simple
 Script'' example, tweaking a few things to make some additional points.
 
-First, we read the fuel efficiency data that is shipped with Stata:
+Stata code appears below in ``chunks'' that are demarcated in the
+following manner:
+
+For code chunks that you want to appear in the rendered document:
+
+\begin{verbatim}```{s} 
+[code here] 
+```
+\end{verbatim}
+
+For code chunks that you DO NOT want to appear in the rendered document:
+
+\begin{verbatim}```{s/} 
+[code here] 
+```
+\end{verbatim}
+
+Now we can proceed with the simple example. First read in the fuel
+efficiency data that is shipped with Stata:
 
 \begin{stlog}
 . sysuse auto, clear
@@ -169,8 +194,9 @@ that is not echoed in the resulting output file (PDF, docx, etc.).
 \caption{Fuel Efficiency}
 \end{figure}
 
-\hypertarget{regression-table}{%
-\section{Regression table}\label{regression-table}}
+\hypertarget{regression-table-with-esttab}{%
+\section{\texorpdfstring{Regression table with
+\texttt{esttab}}{Regression table with esttab}}\label{regression-table-with-esttab}}
 
 Something that we frequently need to do is to report regression tables.
 We can use the \texttt{esttab} function in Stata and insert its output
@@ -182,6 +208,7 @@ here:
 
 {\smallskip}
 
+
 \end{stlog}
 
 \begin{center}
@@ -190,5 +217,71 @@ here:
 
 (If you look at the Stata Markdown .stmd file, you will see that I used
 tex commands to insert the regression table and center it.)
+
+\hypertarget{summary-stats-with-esttab}{%
+\section{\texorpdfstring{Summary stats with
+\texttt{esttab}}{Summary stats with esttab}}\label{summary-stats-with-esttab}}
+
+Sometimes we want nice summary stats tables. Here is an example:
+
+\begin{stlog}
+
+{\smallskip}
+
+
+
+
+
+\end{stlog}
+
+\begin{center}
+\input{sum-stats-example.tex}
+\end{center}
+
+\hypertarget{loop-with-display}{%
+\section{Loop with display}\label{loop-with-display}}
+
+\begin{stlog}
+
+{\smallskip}
+
+  2. sum `varUp', detail
+  3. hist `varUp'
+  4. {\rbr}
+{\smallskip}
+                            Price
+\HLI{61}
+      Percentiles      Smallest
+ 1\%         3291           3291
+ 5\%         3748           3299
+10\%         3895           3667       Obs                  74
+25\%         4195           3748       Sum of Wgt.          74
+{\smallskip}
+50\%       5006.5                      Mean           6165.257
+                        Largest       Std. Dev.      2949.496
+75\%         6342          13466
+90\%        11385          13594       Variance        8699526
+95\%        13466          14500       Skewness       1.653434
+99\%        15906          15906       Kurtosis       4.819188
+(bin=8, start=3291, width=1576.875)
+{\smallskip}
+                        Weight (lbs.)
+\HLI{61}
+      Percentiles      Smallest
+ 1\%         1760           1760
+ 5\%         1830           1800
+10\%         2020           1800       Obs                  74
+25\%         2240           1830       Sum of Wgt.          74
+{\smallskip}
+50\%         3190                      Mean           3019.459
+                        Largest       Std. Dev.      777.1936
+75\%         3600           4290
+90\%         4060           4330       Variance       604029.8
+95\%         4290           4720       Skewness       .1481164
+99\%         4840           4840       Kurtosis       2.118403
+(bin=8, start=1760, width=385)
+{\smallskip}
+
+\end{stlog}
 
 \end{document}

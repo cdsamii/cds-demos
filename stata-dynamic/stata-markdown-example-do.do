@@ -6,15 +6,21 @@
 * Then use 
 * `cat > stata-markdown-example.stmd`
 * `[Type in content for the file.]`
-* Press Ctrl-D to exit the vim text editor.
+* Press Ctrl-D to exit vim.
+* Then you can start writing the .stmd file in a text editor.
+* All the real action takes place in the .stmd file.
+* A .do file like this is just to run the compilation command
+* with any options that you prefer:
 
-* Now, everything you will do will take place in the .stmd file.
-* So a do file like this isn't really necessary, as all it would do 
-* would be to run simple commands like this:
-
+* Set working director to wherever the .stmd file lives:
 cd ~/documents/github/cds-demos/stata-dynamic
+
+* Since I am compiling to PDF via Tex, I need the Tex style file:
 copy https://www.stata-journal.com/production/sjlatex/stata.sty stata.sty
+
+* Compile the .stmd file to output format of your choosing 
+* here it is a PDF via Tex. I am also asking to keep the
+* Tex file:
 markstat using stata-markdown-example.stmd, pdf strict keep(tex)
 
-* These could of course just be run out of the command line
-* with no real loss in reproducibility.
+* End.

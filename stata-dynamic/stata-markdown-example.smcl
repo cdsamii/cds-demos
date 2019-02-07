@@ -3,7 +3,7 @@
       name:  {res}<unnamed>
        {txt}log:  {res}/Users/cyrussamii/Documents/Github/cds-demos/stata-dynamic/stata-markdown-example.smcl
   {txt}log type:  {res}smcl
- {txt}opened on:  {res}28 Jan 2019, 16:51:12
+ {txt}opened on:  {res}29 Jan 2019, 13:05:00
 {txt}
 {com}. //_1
 . sysuse auto, clear
@@ -23,14 +23,63 @@
 {txt}
 {com}. qui eststo: reg gphm weight, robust 
 {txt}
-{com}. qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace
+{com}. qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace mtitles("Gall/100 mi.")
 {txt}
-{com}. //_^
+{com}. //_5q
+. qui estpost sum price weight, detail
+{txt}
+{com}. qui esttab . using sum-stats-example.tex, ///
+>   cell("min(fmt(%9.2f)) mean(fmt(%9.2f)) p50(fmt(%9.2f)) max(fmt(%9.2f)) sd(fmt(%9.2f)) count") noobs r l ///
+>   collabels("Min." "Mean" "Med." "Max." "SD" "Obs.") ///
+>   ti("Summary Stats.") nonum
+{txt}
+{com}. //_6q
+. local varList price weight
+{txt}
+{com}. foreach varUp in `varList' {c -(}
+{txt}  2{com}. sum `varUp', detail
+{txt}  3{com}. hist `varUp'
+{txt}  4{com}. {c )-}
+
+                            {txt}Price
+{hline 61}
+      Percentiles      Smallest
+ 1%    {res}     3291           3291
+{txt} 5%    {res}     3748           3299
+{txt}10%    {res}     3895           3667       {txt}Obs         {res}         74
+{txt}25%    {res}     4195           3748       {txt}Sum of Wgt. {res}         74
+
+{txt}50%    {res}   5006.5                      {txt}Mean          {res} 6165.257
+                        {txt}Largest       Std. Dev.     {res} 2949.496
+{txt}75%    {res}     6342          13466
+{txt}90%    {res}    11385          13594       {txt}Variance      {res}  8699526
+{txt}95%    {res}    13466          14500       {txt}Skewness      {res} 1.653434
+{txt}99%    {res}    15906          15906       {txt}Kurtosis      {res} 4.819188
+{txt}(bin={res}8{txt}, start={res}3291{txt}, width={res}1576.875{txt})
+{res}
+                        {txt}Weight (lbs.)
+{hline 61}
+      Percentiles      Smallest
+ 1%    {res}     1760           1760
+{txt} 5%    {res}     1830           1800
+{txt}10%    {res}     2020           1800       {txt}Obs         {res}         74
+{txt}25%    {res}     2240           1830       {txt}Sum of Wgt. {res}         74
+
+{txt}50%    {res}     3190                      {txt}Mean          {res} 3019.459
+                        {txt}Largest       Std. Dev.     {res} 777.1936
+{txt}75%    {res}     3600           4290
+{txt}90%    {res}     4060           4330       {txt}Variance      {res} 604029.8
+{txt}95%    {res}     4290           4720       {txt}Skewness      {res} .1481164
+{txt}99%    {res}     4840           4840       {txt}Kurtosis      {res} 2.118403
+{txt}(bin={res}8{txt}, start={res}1760{txt}, width={res}385{txt})
+{res}{txt}
+{com}. 
+. //_^
 . log close
       {txt}name:  {res}<unnamed>
        {txt}log:  {res}/Users/cyrussamii/Documents/Github/cds-demos/stata-dynamic/stata-markdown-example.smcl
   {txt}log type:  {res}smcl
- {txt}closed on:  {res}28 Jan 2019, 16:51:12
+ {txt}closed on:  {res}29 Jan 2019, 13:05:03
 {txt}{.-}
 {smcl}
 {txt}{sf}{ul off}

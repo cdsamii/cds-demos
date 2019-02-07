@@ -7,13 +7,19 @@ header-includes:
   - \usepackage{tabularx}
   - \usepackage{booktabs}
   - \usepackage{lscape}
+  - \usepackage{fullpage}
+  - \usepackage{pgffor}
 ---
 
 # Overview
 
-Here are some notes and examples for using Stata Markdown from German Rodriguez.
+Here are some notes and examples for using the Stata Markdown package.
+The Stata Markdown package was written by German Rodriguez.
+These notes offer some basic guidance on using the package.
 For instructions on installation and dependencies, refer to the 
-Stata Markdown website.
+Stata Markdown website:
+
+<https://data.princeton.edu/stata/markdown/>
 
 I give examples of some things we might want to do in social science
 related projects.
@@ -21,7 +27,8 @@ related projects.
 # Markdown 
 
 Markdown is a simple markup language that, through Pandoc, can be rendered
-in a variety of formats, including pdf (via tex), html, or docx.  If you are used to writing latex or html, then markdown 
+in a variety of formats, including pdf (via tex), html, or docx.  
+If you are used to writing latex or html, then markdown 
 will be easy, since it admits a lot of the syntax used in those languages.
 
 There are lots of cheatsheets out there, such as:
@@ -37,7 +44,9 @@ numbered list:
 
 The header of this document is a YAML header for Markdown, 
 which contains meta instructions for the Markdown->Pandoc 
-compilation.
+compilation.  I am rendering this document in PDF through
+Tex, and so you will see that in my YAML header I have
+included some Tex instructions.
 
 # Workflow
 
@@ -61,7 +70,25 @@ Here we replicate the simple example from German Rodriguez's
 "Simple Script" example, tweaking a few things to make
 some additional points.  
 
-First, we read the fuel efficiency data that is shipped with Stata:
+Stata code appears below in "chunks" that are
+demarcated in the following manner: 
+
+For code chunks that you want to appear in the rendered
+document:
+\begin{verbatim}```{s} 
+[code here] 
+```
+\end{verbatim}
+
+For code chunks that you DO NOT want to appear in the rendered
+document:
+\begin{verbatim}```{s/} 
+[code here] 
+```
+\end{verbatim}
+
+Now we can proceed with the simple example.  First read in the 
+fuel efficiency data that is shipped with Stata:
 ```{s}
     sysuse auto, clear
 ```
@@ -88,7 +115,7 @@ here:
 ```{s/}
 eststo clear
 qui eststo: reg gphm weight, robust 
-qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace
+qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace mtitles("Gall/100 mi.")
 ```
 \begin{center}
 \input{reg-example.tex}
@@ -97,6 +124,29 @@ qui esttab using reg-example.tex, b(2) se(2) scalars(r2) l replace
 (If you look at the Stata Markdown .stmd file, you will see that 
 I used tex commands to insert the regression table and center it.)
 
-# Summary stats with `tabout`
+# Summary stats with `esttab`
 
-Here I will work out a `tabout` example.
+Sometimes we want nice summary stats tables.  Here is an example:
+```{s/}
+qui estpost sum price weight, detail
+qui esttab . using sum-stats-example.tex, ///
+  cell("min(fmt(%9.2f)) mean(fmt(%9.2f)) p50(fmt(%9.2f)) max(fmt(%9.2f)) sd(fmt(%9.2f)) count") noobs r l ///
+  collabels("Min." "Mean" "Med." "Max." "SD" "Obs.") ///
+  ti("Summary Stats.") nonum
+```
+\begin{center}
+\input{sum-stats-example.tex}
+\end{center}
+
+# Loop with display
+
+```{s/}
+local varList price weight
+foreach varUp in `varList' {
+	sum `varUp', detail
+	hist `varUp'
+}
+
+```
+
+
