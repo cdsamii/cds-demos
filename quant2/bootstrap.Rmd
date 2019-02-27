@@ -1,0 +1,230 @@
+---
+title: "Bootstrap"
+author: "Cyrus Samii"
+date: "2/26/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.dim = c(4,4))
+library(sandwich)
+library(lmtest)
+```
+
+## Inverse Propensity Score Weighting (IPW)
+
+Recall that the stabilized IPW estimator for the ATE is
+$$
+\hat{\rho}_{IPW} = \frac{\sum_{i=1}^n \frac{D_i}{\hat{e}(X_i)}Y_i}{\sum_{i=1}^n \frac{D_i}{\hat{e}(X_i)}} - \frac{\sum_{i=1}^n \frac{1-D_i}{1-\hat{e}(X_i)}Y_i}{\sum_{i=1}^n \frac{1-D_i}{1-\hat{e}(X_i)}},
+$$
+and that this can be implementing with weighted least squares regression in which you regress $Y$ on $D$, using the inverse of the estimate propensity score $\hat{e}(X_i)$ as the weights for the treated and the inverse of $1-\hat{e}(X_i)$ as the weights for the control.  
+
+Inference for $\hat{\rho}_{IPW}$ should account for the sampling variation in the estimated propensity scores, $\hat{e}(\cdot)$.  In the Robust Inference I lecture notes, we showed how to derived the variance when $\hat{e}(\cdot)$ is estimated using an $M$-estimator. Here we will use the bootstrap instead.
+
+### Make a simulated population with confounding
+
+We will simulate a population with confounding in $X$.  We do it in a way that makes it so that simple control specifications for $X$ in a regression would be inadequate, and so the specification challenge is a little harder than usual:
+```{r}
+# Make population data
+set.seed(11)
+N.pop <- 10000
+index <- 1:N.pop
+X <- .5*exp(rnorm(N.pop))
+Y0 <- 50-.05*X^2+(1+.5*(max(X)-X))*rnorm(N.pop)
+Y1 <- -1.5 + Y0 + 10*X + .2*X^2+ .25*X*rnorm(N.pop)
+e.X <- (1+exp(1-.2*X))^(-1)
+D <- rbinom(N.pop, 1, e.X)
+Y <- D*Y1 + (1-D)*Y0
+rho <- mean(Y1-Y0)
+
+plot(X, Y0, col="blue", pch=19, 
+     cex=.25, ylim=range(c(Y1,Y0)),
+     main="Potential outcomes")
+points(X, Y1, col="red", pch=19, cex=.25)
+
+plot(X, e.X, pch=19, main="Propensity scores")
+
+plot(X, Y, type="n", ,
+     main="Realized outcomes")
+points(X[D==0], Y[D==0], col="blue", pch=19, cex=.25)
+points(X[D==1], Y[D==1], col="red", pch=19, cex=.25)
+rho
+summary(lm(Y~D))[[4]][,1]
+summary(lm(Y~D+X))[[4]][,1]
+summary(lm(Y~D*I(X-mean(X))))[[4]][,1]
+
+pop.data <- data.frame(index, Y, D, X)
+```
+
+### Sampling process
+
+Next we draw a sample and estimate the effect using simple regression strategies and then IPW:
+
+```{r}
+# Draw a sample:
+n.samp <- 1000
+
+samp.i <- sample(index, n.samp)
+samp.data <- pop.data[samp.i,]
+plot(samp.data$X, samp.data$Y, type="n")
+points(samp.data$X[D==0], samp.data$Y[D==0], col="blue")
+points(samp.data$X[D==1], samp.data$Y[D==1], col="red")
+
+summary(lm(Y~D, data=samp.data))[[4]][,1]
+summary(lm(Y~D+X, data=samp.data))[[4]][,1]
+summary(lm(Y~D*I(X-mean(X)), data=samp.data))[[4]][,1]
+
+e.hat.X <- predict(glm(D~X, data=samp.data, 
+						family="binomial"), 
+						type="response")
+
+samp.data$w <- samp.data$D*(1/e.hat.X) + (1-samp.data$D)*(1/(1-e.hat.X))
+
+plot(samp.data$X, samp.data$Y, type="n")
+points(samp.data$X[D==0], samp.data$Y[D==0], 
+       cex=.5*samp.data$w[D==0],col="blue")
+points(samp.data$X[D==1], samp.data$Y[D==1], 
+       cex=.5*samp.data$w[D==1],col="red")
+```
+
+### Fitting IPW model
+
+```{r}
+fit.ipsw.s <- lm(Y~D, weights=samp.data$w, data=samp.data)
+summary(fit.ipsw.s)[[5]][,1]
+```
+
+### Estimating the standard error
+
+```{r}
+# Get bootstrap estimate
+n.boot <- 500
+ate.hat <- rep(NA, n.boot)
+t.out <- rep(NA, n.boot)
+
+for (i in 1:n.boot){
+	boot.index <- sample(samp.data$index, n.samp, replace=T)
+	boot.data <- samp.data[match(boot.index, samp.data$index),] 	
+	e.hat.boot <- predict(glm(D~X, data=boot.data, 
+							family="binomial"), 
+							type="response")
+boot.data$w <- boot.data$D*(1/e.hat.boot)/sum(boot.data$D*(1/e.hat.boot)) + (1-boot.data$D)*(1/(1-e.hat.boot))/sum((1-boot.data$D)*(1/(1-e.hat.boot)))
+	fit.ipsw.b <- lm(Y~D, weights=boot.data$w, data=boot.data) 
+	ate.hat[i] <- coef(fit.ipsw.b)[2]
+	t.out[i] <- coeftest(fit.ipsw.b , vcov.= vcovHC(fit.ipsw.b, "HC2"))[2,3]
+	cat(paste(i, " ")); flush.console() # progress indicator
+}
+
+hist(ate.hat, breaks=50)
+abline(v=coef(fit.ipsw.s)[2], col="blue")
+abline(v=rho, col="red")
+
+aCI.out <- coeftest(fit.ipsw.s , vcov.= vcovHC(fit.ipsw.s, "HC2"))
+
+# Naive analytical asymptotic CI ignoring pscore estimation
+aaCI <- c(aCI.out[2,1]-qt(.975, fit.ipsw.s[[9]])*aCI.out[2,2], aCI.out[2,1]+qt(.975, fit.ipsw.s[[9]])*aCI.out[2,2])
+# Bootstrap-b CI
+bbCI <- quantile(ate.hat, c(0.025, .975))
+# Bootstrap-t CI
+btCI <- aCI.out[2,2]*quantile(t.out, c(0.025, .975))
+
+coef(fit.ipsw.s)[2]
+aaCI
+bbCI
+btCI
+```
+
+### Comparing to the true sampling distribution
+
+```{r}
+
+n.iter <- 500
+ate.hat.s <- rep(NA, n.iter)
+t.out.s <- rep(NA, n.iter)
+
+for(j in 1:n.iter){
+	samp.i <- sample(index, n.samp)
+	samp.data <- pop.data[samp.i,]
+	e.hat.X <- predict(glm(D~X, data=samp.data, 
+						family="binomial"), 
+						type="response")
+	samp.data$w <- samp.data$D*(1/e.hat.X) + (1-samp.data$D)*(1/(1-e.hat.X))
+	fit.ipsw <- lm(Y~D, weights=samp.data$w, data=samp.data)
+	ate.hat.s[j] <- coef(fit.ipsw)[2]
+	t.out.s[j] <- coeftest(fit.ipsw , vcov.= vcovHC(fit.ipsw, "HC2"))[2,3]
+	cat(paste(j, " ")); flush.console() # progress indicator
+}
+
+# True coef mean
+mean(ate.hat.s)
+# Estimate
+coef(fit.ipsw.s)[2]
+
+# True sampling sd
+sd(ate.hat.s)
+# Estimates
+#  Naive analytical
+aCI.out[2,2]
+#  bootstrap-b
+sd(ate.hat)
+
+# True t stat dist
+plot(density(t.out.s-mean(t.out.s)), 
+     main="Sampling distribution",
+     xlim=c(-4,6))
+# Estimates:
+#   Analytical
+points(	seq(-4,4,.01), 
+		dt(seq(-4,4,.01), 
+		df=fit.ipsw.s[[9]]), 
+		type="l", 
+		col="red")
+#  Bootstrap-t
+points(density(t.out-mean(t.out)), type="l",col="blue")
+legend(2,.3, legend=c("True","Analytical","Boot-t"),
+       col=c("black","red","blue"),
+       lty=c("solid","solid","solid"),
+       cex=.75)
+```
+
+## Bootstrap failure
+
+We will show the failure of the bootstrap for estimates of the maximum, using $\max\{X_i\}$ for units $i$ in the sample. This is a non-smooth statistic:
+
+First, we can view our target, the population maximum, relative to what we get in our sample:
+```{r}
+par(mfrow=c(1,1))
+pophist <- hist(pop.data$X, breaks=100, freq=TRUE, main="Hist. of X")
+hist(samp.data$X, add=TRUE, breaks=pophist$breaks, col="black")
+max(pop.data$X)
+max(samp.data$X)
+```
+
+Now look at the sampling distribution of $\max\{X_i\}$:
+```{r}
+max.s <- rep(NA, n.iter)
+
+for(j in 1:n.iter){
+	samp.i <- sample(index, n.samp)
+	samp.data <- pop.data[samp.i,]
+	max.s[j] <-  max(samp.data$X)
+}
+
+hist(max.s, freq=F, breaks=pophist$breaks)
+```
+
+Now look at how the bootstrap attempts to approximate this:
+```{r}
+max.b <- rep(NA, n.iter)
+
+for (i in 1:n.boot){
+	boot.index <- sample(samp.data$index, n.samp, replace=T)
+	boot.data <- samp.data[match(boot.index, samp.data$index),] 	
+	max.b[i] <-  max(boot.data$X)
+}	
+
+hist(max.b, freq=F, breaks=pophist$breaks)
+sd(max.s)
+sd(max.b)
+```
+
