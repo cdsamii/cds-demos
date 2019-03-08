@@ -1,0 +1,101 @@
+---
+title: "Conformal Inference Tutorial"
+author: "Cyrus Samii (cds2083@nyu.edu)"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    number_sections: yes
+    df_print: paged
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      results = 'asis',
+                      fig.dim=c(4,4)) 
+knitr::opts_knit$set(root.dir="~/Documents/Github/cds-demos/conformal")
+```
+
+# Introduction
+
+This tutorial offers an introduction to conformal inference, which is a method for constructing valid (with respect to coverage error) prediction bands for individual forecasts.  The appeal of conformal inference is that it relies on few parametric assumptions.  For formal treatments of conformal inference, refer to the following:
+
+- Shafer and Vovk (2007) "A Tutorial on Conformal Prediction", [arxiv](https://arxiv.org/abs/0706.3188).
+
+- Lei et al. (2017) "Distribution-Free Predictive Inference For Regression", [arxiv](https://arxiv.org/abs/1604.04173).
+
+The current tutorial is meant to be a gentle introduction to complement these more complete treatments.
+
+# Basic Idea
+
+Suppose a sample of $n$ iid draws from $P$, $U(n) = U_1,...,U_n \sim P$. Consider this sample's distribution:
+```{r }
+set.seed(123)
+n <- 1000
+U <- rnorm(n)
+hist(U)
+```
+
+Now suppose a $n+1$th draw, $U_{n+1}$, is to be taken from $P$.  What is the probability, with respect to the sample of $N+1$ draws from $P$, that $U_{n+1}$ would exceed some value $u$? Given that all draws are iid, we can work with the empirical quantiles of the augmented sample, $(U(n), u)$ to see what mass resides to the right of $u$.  E.g., suppose that $u = 2$. Then our augmented sample, with the associated finite sample probability, would be as follows: 
+```{r}
+u <- 2
+Ua <- c(U, u)
+hist(Ua)
+abline(v=u)
+print(round(mean(Ua > u), 3))
+```
+
+Suppose we set a miscoverage ("error") rate of $\alpha$.  E.g., suppose that we choose $\alpha = 0.05$.  Then, we could do a line search of $u$ values to define an interval, $C$, for which $\text{Pr}[u \in C] \ge 1-\alpha = 0.95$.
+
+```{r}
+nEval <- 200
+u.candidate <- seq(from=min(U), to=max(U), length = nEval)
+Cbounds <- c(u.candidate[match(5, apply(as.matrix(u.candidate),
+              1,
+              function(x){floor(2.5+100*(mean(c(U, x) < x)))}))],
+             u.candidate[match(95, apply(as.matrix(u.candidate),
+              1,
+              function(x){ceiling(-2.5+100*(mean(c(U, x) < x)))}))])
+print(Cbounds)
+hist(U)
+abline(v=Cbounds)
+```
+
+This interval, $C$ is a conformal interval.  
+
+# Naive Conformal Regression Bands
+
+This section and the next follow Lei et al. (2017).
+
+Now suppose that we observe $n$ iid draws of $Z_i = (X_i, Y_i)$ from $P$, and we can to construct a prediction band for $Y_{n+1}$ given $X_{n+1}$, also drawn from $P$.  A naive approach would first estimate a regression function $\mu(X_i)$ for $Y$ conditional on $X$, generate a prediction $\widehat{\mu}(X_{n+1})$ and then construct a $1-\alpha$ band around $\widehat{\mu}(X_{n+1})$ using $\pm(1-\alpha/2)$ quantile of the distribution of fitted residuals $|Y_i - \widehat{\mu}(X_i)|$:
+
+```{r}
+X <- rnorm(n)
+Y <- X + U
+fitlm <- lm(Y~X)
+eVec <- abs(fitlm$residuals)
+hist(eVec)
+plot(X,Y)
+Xnew <- 1
+abline(fitlm)
+abline(v=Xnew, lty="dashed")
+muHat <- predict(fitlm, newdata=data.frame(X=1))
+points(Xnew, muHat, pch=19, col="red")
+C.X <- c(muHat-quantile(eVec, .975), muHat+quantile(eVec, .975))
+points(rep(Xnew, 2), C.X, type="l", col="red", lwd=2)
+```
+
+While intuitive, such bands typically undercover, as the empirical residual distribution typically understates the true error variance.  The goal of conformal inference is to correct on such undercoverage to deliver bands that have proper finite sample coverage.
+
+# Conformal Regression Bands with Augmented Data
+
+One way to improve upon the naive bands is to use the same data augmentation method as we used in the "Basic Idea" section above. That is, we fit an augmented regression estimator $\widehat{\mu}_y$ using $(Z_1,...,Z_n, (X_{n+1}, y))$.  Then the fitted residuals are constructed as,
+$$
+R_{y,i} = |Y_i - \widehat{\mu}_y(X_i)|, i=1,...,n \text{ and } R_{y,n+1} = |y-\widehat{\mu}_y(X_{n+1})|.
+$$
+Then, we rank $R_{y,n+1}$ among the $R_{y,i}$ to compute the proportion of points in the augmented sample with a fitted residual that is smaller than $R_{y,n+1}$:
+$$
+\pi(y) = \frac{1}{n+1}\sum_{i=1}^{n+1} 1\{ R_{y,i} \le R_{y,n+1}\}
+$$
+We then construct the conformal band as the interval between values $(y_l, y_h)$ such that $(\pi(y_l), \pi(y_h)) = (\alpha/2, 1-\alpha/2))$.
+
