@@ -30,7 +30,7 @@ The current tutorial is meant to be a gentle introduction to complement these mo
 
 Suppose a sample of $n$ iid draws from $P$, $U(n) = U_1,...,U_n \sim P$. Consider this sample's distribution:
 ```{r }
-set.seed(123)
+set.seed(12345)
 n <- 1000
 U <- rnorm(n)
 hist(U)
@@ -53,9 +53,9 @@ u.candidate <- seq(from=min(U), to=max(U), length = nEval)
 Cbounds <- c(u.candidate[match(5, apply(as.matrix(u.candidate),
               1,
               function(x){floor(2.5+100*(mean(c(U, x) < x)))}))],
-             u.candidate[match(95, apply(as.matrix(u.candidate),
+             rev(u.candidate)[match(95, rev(apply(as.matrix(u.candidate),
               1,
-              function(x){ceiling(-2.5+100*(mean(c(U, x) < x)))}))])
+              function(x){ceiling(-2.5+100*(mean(c(U, x) < x)))})))])
 print(Cbounds)
 hist(U)
 abline(v=Cbounds)
@@ -72,14 +72,15 @@ Now suppose that we observe $n$ iid draws of $Z_i = (X_i, Y_i)$ from $P$, and we
 ```{r}
 X <- rnorm(n)
 Y <- X + U
-fitlm <- lm(Y~X)
+regData <- data.frame(X,Y)
+fitlm <- lm(Y~X, data=regData)
 eVec <- abs(fitlm$residuals)
 hist(eVec)
 plot(X,Y)
-Xnew <- 1
+Xnew <- -1.5
 abline(fitlm)
 abline(v=Xnew, lty="dashed")
-muHat <- predict(fitlm, newdata=data.frame(X=1))
+muHat <- predict(fitlm, newdata=data.frame(X=Xnew))
 points(Xnew, muHat, pch=19, col="red")
 C.X <- c(muHat-quantile(eVec, .975), muHat+quantile(eVec, .975))
 points(rep(Xnew, 2), C.X, type="l", col="red", lwd=2)
@@ -98,4 +99,39 @@ $$
 \pi(y) = \frac{1}{n+1}\sum_{i=1}^{n+1} 1\{ R_{y,i} \le R_{y,n+1}\}
 $$
 We then construct the conformal band as the interval between values $(y_l, y_h)$ such that $(\pi(y_l), \pi(y_h)) = (\alpha/2, 1-\alpha/2))$.
+```{r}
+nEval <- 200
+yCand <- seq(from=min(Y), to=max(Y), length=nEval)
+
+confPredict <- function(y, Xin){
+  nData <- nrow(regData)  
+  regData.a <- rbind(regData,c(Xin, y))
+  fitlm.a <- lm(Y~X, data=regData.a)
+  resOut <- abs(fitlm.a$residuals)
+  resOut_new <- resOut[length(resOut)]
+  pi.y <- mean(apply(as.matrix(resOut),
+        1,
+        function(x){x<=resOut_new}))
+  testResult <- pi.y*(nData+1) <= ceiling(.95*(nData+1))
+  return(testResult)
+}
+
+Cxa <- range(yCand[sapply(yCand, confPredict, Xin=Xnew)])
+
+plot(X,Y)
+abline(fitlm)
+abline(v=Xnew, lty="dashed")
+points(rep((Xnew+.05), 2), C.X, type="l", col="red", lwd=2)
+points(rep(Xnew, 2), Cxa, type="l", col="blue", lwd=3)
+```
+
+Lei et al. (2017, Thm. 2.1) shows that when the residual distribution is continuous, this conformal band both covers *marginally* at the nominal rate, at least, and is tight on the order of $1/(n+1)$.
+
+# Split Conformal Regression Bands
+
+The augmented regression conformal bands are intensive to compute, as one needs to evaluate for a vector of $y$ values.  This could be costly if the regression model is complex (although in the case above things were quite simple).
+
+# Locally Weighted Conformal Bands
+
+Allows for the length of the bands to vary in $X$, accounting for variation in the residual variance over $X$.
 
