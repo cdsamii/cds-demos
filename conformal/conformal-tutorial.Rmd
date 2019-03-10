@@ -24,7 +24,7 @@ This tutorial offers an introduction to conformal inference, which is a method f
 
 - Lei et al. (2017) "Distribution-Free Predictive Inference For Regression", [arxiv](https://arxiv.org/abs/1604.04173).
 
-The current tutorial is meant to be a gentle introduction to complement these more complete treatments.
+The current tutorial is meant to be a gentle introduction to complement these more complete treatments.  It follows Lei et al. very closely---sort of a "Cliffs Notes" with some worked illustrations along the way.
 
 # Basic Idea
 
@@ -63,7 +63,7 @@ abline(v=Cbounds)
 
 This interval, $C$ is a conformal interval.  
 
-# Naive Conformal Regression Bands
+# Naive Conformal Regression Prediction Bands
 
 This section and the next follow Lei et al. (2017).
 
@@ -88,17 +88,27 @@ points(rep(Xnew, 2), C.X, type="l", col="red", lwd=2)
 
 While intuitive, such bands typically undercover, as the empirical residual distribution typically understates the true error variance.  The goal of conformal inference is to correct on such undercoverage to deliver bands that have proper finite sample coverage.
 
-# Conformal Regression Bands with Augmented Data
+# Refined Conformal Regression Prediction Bands with Augmented Data
 
-One way to improve upon the naive bands is to use the same data augmentation method as we used in the "Basic Idea" section above. That is, we fit an augmented regression estimator $\widehat{\mu}_y$ using $(Z_1,...,Z_n, (X_{n+1}, y))$.  Then the fitted residuals are constructed as,
+One way to improve upon the naive bands is to use the same data augmentation method as we used in the "Basic Idea" section above. That is, we augment our data with  $X_{n+1}$ and a candidate $y$, and then fit an augmented regression estimator $\widehat{\mu}_y$ using $(Z_1,...,Z_n, (X_{n+1}, y))$.  Then the fitted residuals are constructed as,
 $$
 R_{y,i} = |Y_i - \widehat{\mu}_y(X_i)|, i=1,...,n \text{ and } R_{y,n+1} = |y-\widehat{\mu}_y(X_{n+1})|.
 $$
 Then, we rank $R_{y,n+1}$ among the $R_{y,i}$ to compute the proportion of points in the augmented sample with a fitted residual that is smaller than $R_{y,n+1}$:
 $$
-\pi(y) = \frac{1}{n+1}\sum_{i=1}^{n+1} 1\{ R_{y,i} \le R_{y,n+1}\}
+\pi(y) = \frac{1}{n+1}\sum_{i=1}^{n+1} 1\{ R_{y,i} \le R_{y,n+1}\} = \frac{1}{n+1} + \frac{1}{n+1}\sum_{i=1}^{n} 1\{ R_{y,i} \le R_{y,n+1}\}
 $$
-We then construct the conformal band as the interval between values $(y_l, y_h)$ such that $(\pi(y_l), \pi(y_h)) = (\alpha/2, 1-\alpha/2))$.
+By exchangeabilty and by the fact that $\widehat{\mu}$ is symmetric over the range of $X$, we have that $\pi(Y_{n+1})$ is uniform over $\{1/(n+1),...,1\}$. As such,
+$$
+\text{Pr}[(n+1)\pi(Y_{n+1}) \le \lceil (1-\alpha)(n+1)\rceil ] \ge 1-\alpha
+$$
+
+We can thus construct the conformal band by evaluating $\pi(y)$ over a range of candidate $y$ values, in which case the interval is given by,
+$$
+C(X_{n+1}) = \left\{ y \in\mathbb{R} : (n+1)\pi(y) \le \lceil(1-\alpha)(n-1) \rceil \right\}.
+$$
+Here is an illustration:
+
 ```{r}
 nEval <- 200
 yCand <- seq(from=min(Y), to=max(Y), length=nEval)
@@ -112,7 +122,7 @@ confPredict <- function(y, Xin){
   pi.y <- mean(apply(as.matrix(resOut),
         1,
         function(x){x<=resOut_new}))
-  testResult <- pi.y*(nData+1) <= ceiling(.95*(nData+1))
+  testResult <- pi.y*(nData+1) <= ceiling(.975*(nData+1))
   return(testResult)
 }
 
@@ -125,13 +135,15 @@ points(rep((Xnew+.05), 2), C.X, type="l", col="red", lwd=2)
 points(rep(Xnew, 2), Cxa, type="l", col="blue", lwd=3)
 ```
 
-Lei et al. (2017, Thm. 2.1) shows that when the residual distribution is continuous, this conformal band both covers *marginally* at the nominal rate, at least, and is tight on the order of $1/(n+1)$.
+The refined band (blue) is just a touch wider in this example.
 
-# Split Conformal Regression Bands
+Lei et al. (2017, Thm. 2.1) shows that when the residual distribution is continuous, this conformal band both covers *marginally* at the nominal rate, at least, and is tight on the order of $1/(n+1)$.  Stronger assumptions are needed for the band to cover *conditionally* (on $X$) at the nominal rate.
+
+# Computational Efficiency with Split Conformal Regression Prediction Bands
 
 The augmented regression conformal bands are intensive to compute, as one needs to evaluate for a vector of $y$ values.  This could be costly if the regression model is complex (although in the case above things were quite simple).
 
-# Locally Weighted Conformal Bands
+# Accounting for Heteroskedasticity with Locally Weighted Conformal Bands
 
 Allows for the length of the bands to vary in $X$, accounting for variation in the residual variance over $X$.
 
