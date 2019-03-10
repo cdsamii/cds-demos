@@ -143,7 +143,58 @@ Lei et al. (2017, Thm. 2.1) shows that when the residual distribution is continu
 
 The augmented regression conformal bands are intensive to compute, as one needs to evaluate for a vector of $y$ values.  This could be costly if the regression model is complex (although in the case above things were quite simple).
 
+Split conformal prediction has you fit on one random split (e.g., a half) of the data and then work with quantiles of the residual distribution from the other split, in a manner that resembles the naive the band above:
+
+```{r}
+
+splitConfPredict <- function(Xin){
+  nData <- nrow(regData)
+  regData$index <- 1:nData
+  regData$split <- 1
+  regData$split[sample(regData$index, floor(nrow(regData)/2), replace=F)] <- 2
+  fitlm.spl <- lm(Y~X, data=subset(regData, split==1))
+  resOut <- abs(subset(regData, split==2)$Y - predict(fitlm.spl,
+                                         newdata=subset(regData, split==2)))
+  kOut <- ceiling(((nData/2)+1)*(.975))
+  resUse <- resOut[order(resOut)][kOut]
+  Y.hat <- predict(fitlm.spl, newdata=data.frame(X=Xin))
+  C.split <- c(Y.hat-resUse,Y.hat+resUse)
+  return(C.split)
+}
+
+plot(X,Y)
+abline(fitlm)
+abline(v=Xnew, lty="dashed")
+points(rep((Xnew+.05), 2), C.X, type="l", col="red", lwd=2)
+points(rep(Xnew, 2), Cxa, type="l", col="blue", lwd=3)
+points(rep(Xnew-.05, 2), splitConfPredict(Xnew), type="l", col="green", lwd=3)
+```
+
+Lei et al. show that this split band is tight for *marginal* coverage at a rate that is similar to that of the augmented data band described in the previous section.
+
+
 # Accounting for Heteroskedasticity with Locally Weighted Conformal Bands
 
-Allows for the length of the bands to vary in $X$, accounting for variation in the residual variance over $X$.
+One problem with the bands presented above is that their width does not vary in $X$. E.g., here is the augmented data conformal band over values of X:
+
+```{r}
+aug.over.X <- function(Xval){range(yCand[sapply(yCand, 
+                                      confPredict, 
+                                      Xin=Xval)])}
+Xvals <- -4:4
+augBands <- matrix(unlist(lapply(Xvals, aug.over.X)), ncol=2, byrow=T)
+plot(X,Y, type="n")
+polygon(c(Xvals, rev(Xvals)),
+        c(augBands[,1],rev(augBands[,2])),
+        border=F,
+        col="gray")
+points(X,Y)
+abline(fitlm)
+```
+
+
+
+If the residual distribution has variance that varies in $X$ (i.e., heteroskedasticity), however, this can produce bands that, while having good marginal coverage properties, may have poor conditional coverage properties.  
+
+Locally weighted conformal bands allows for the length of the bands to vary in $X$ in a manner that accounts for heteroskedasticity.
 
