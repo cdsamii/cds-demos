@@ -196,5 +196,70 @@ abline(fitlm)
 
 If the residual distribution has variance that varies in $X$ (i.e., heteroskedasticity), however, this can produce bands that, while having good marginal coverage properties, may have poor conditional coverage properties.  
 
-Locally weighted conformal bands allows for the length of the bands to vary in $X$ in a manner that accounts for heteroskedasticity.
+Locally weighted conformal bands allows for the length of the bands to vary in $X$ in a manner that accounts for heteroskedasticity.  The idea is to model the conditional spread, and use estimates of the conditional spread to scale the bands.
+
+We model the conditional spread of the absolute residuals using a local (kernel-weighted) polynomial regression, and then use that to scale the bands.  I will modify the example so that heterskedasticity is indeed present:
+
+```{r}
+Uhet <- rnorm(n, sd=exp(.5*X))
+Y <- X + Uhet
+regData <- data.frame(X,Y)
+plot(X, Y)
+fitlm.het <- lm(Y~X, data=regData)
+regData$absRes <- abs(fitlm.het$residuals)
+locFit <- locpol(absRes~X, 
+                 data=regData,
+                 bw=2)  
+plot(regData$X, absRes)
+points(locFit$lpFit[,locFit$X],locFit$lpFit[,locFit$Y],type="l",col="blue")
+
+
+```
+
+Now we apply this version of locally weighted conformal prediction:
+
+```{r}
+library(locpol)
+nEval <- 200
+yCand <- seq(from=min(Y), to=max(Y), length=nEval)
+
+confPredict.lw <- function(y, Xin, bwArg){
+#y <- -2
+#Xin <- Xnew
+#bwArg <- 2
+  nData <- nrow(regData)  
+  regData.a <- rbind(regData,c(Xin, y))
+  fitlm.a <- lm(Y~X, data=regData.a)
+  regData.a$resOut.sc <- abs(fitlm.a$residuals)
+  xevalVec <- c(rev(seq(from=Xin, to=min(X), by= -0.25)), 
+            seq(from=Xin+.25, to=max(X), by=.25))
+  locFit <- locpol(resOut.sc~X, 
+                 data=regData.a,
+                 bw=bwArg,
+                 xeval=xevalVec)  
+  resScale <- locFit$lpFit[,2][locFit$lpFit[,1]==Xin]
+  resOut <- regData.a$resOut.sc*resScale
+  resOut_new <- resOut[length(resOut)]
+  pi.y <- mean(apply(as.matrix(resOut),
+        1,
+        function(x){x<=resOut_new}))
+  testResult <- pi.y*(nData+1) <= ceiling(.975*(nData+1))
+  return(testResult)
+}
+
+
+aug.over.X.lw <- function(Xval){range(yCand[sapply(yCand, 
+                                      confPredict.lw, 
+                                      Xin=Xval,
+                                      bwArg=2)])}
+Xvals <- -3:3
+augBands.lw <- matrix(unlist(lapply(Xvals, aug.over.X.lw)), ncol=2, byrow=T)
+plot(X,Y, type="n")
+polygon(c(Xvals, rev(Xvals)),
+        c(augBands.lw[,1],rev(augBands.lw[,2])),
+        border=F,
+        col="gray")
+points(X,Y)
+abline(fitlm.het)
+```
 
