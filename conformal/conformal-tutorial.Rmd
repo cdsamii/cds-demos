@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       results = 'asis',
                       fig.dim=c(4,4)) 
 knitr::opts_knit$set(root.dir="~/Documents/Github/cds-demos/conformal")
+library(locpol)
 ```
 
 # Introduction
@@ -25,6 +26,8 @@ This tutorial offers an introduction to conformal inference, which is a method f
 - Lei et al. (2017) "Distribution-Free Predictive Inference For Regression", [arxiv](https://arxiv.org/abs/1604.04173).
 
 The current tutorial is meant to be a gentle introduction to complement these more complete treatments.  It follows Lei et al. very closely---sort of a "Cliffs Notes" with some worked illustrations along the way.
+
+The code that I have written below is not meant to be production level. If you actually want to use conformal methods, then you should use the `conformalInference` package [(github link)](https://github.com/ryantibs/conformal). The code here is just to provide algorithmic illustrations of conformal methods.
 
 # Basic Idea
 
@@ -210,7 +213,7 @@ regData$absRes <- abs(fitlm.het$residuals)
 locFit <- locpol(absRes~X, 
                  data=regData,
                  bw=2)  
-plot(regData$X, absRes)
+plot(regData$X, regData$absRes)
 points(locFit$lpFit[,locFit$X],locFit$lpFit[,locFit$Y],type="l",col="blue")
 
 
@@ -219,14 +222,10 @@ points(locFit$lpFit[,locFit$X],locFit$lpFit[,locFit$Y],type="l",col="blue")
 Now we apply this version of locally weighted conformal prediction:
 
 ```{r}
-library(locpol)
 nEval <- 200
 yCand <- seq(from=min(Y), to=max(Y), length=nEval)
 
 confPredict.lw <- function(y, Xin, bwArg){
-#y <- -2
-#Xin <- Xnew
-#bwArg <- 2
   nData <- nrow(regData)  
   regData.a <- rbind(regData,c(Xin, y))
   fitlm.a <- lm(Y~X, data=regData.a)
@@ -239,20 +238,24 @@ confPredict.lw <- function(y, Xin, bwArg){
                  xeval=xevalVec)  
   resScale <- locFit$lpFit[,2][locFit$lpFit[,1]==Xin]
   resOut <- regData.a$resOut.sc*resScale
-  resOut_new <- resOut[length(resOut)]
+  resOut_new <- regData.a$resOut.sc[length(resOut)]
   pi.y <- mean(apply(as.matrix(resOut),
         1,
         function(x){x<=resOut_new}))
   testResult <- pi.y*(nData+1) <= ceiling(.975*(nData+1))
-  return(testResult)
+  return(list(testResult,resScale))
 }
 
-
-aug.over.X.lw <- function(Xval){range(yCand[sapply(yCand, 
-                                      confPredict.lw, 
+aug.over.X.lw <- function(Xval){
+  Cout.lw <- range(yCand[unlist(sapply(yCand,
+                                      confPredict.lw,
                                       Xin=Xval,
-                                      bwArg=2)])}
+                                      bwArg=2)[1,])])
+  return(Cout.lw)  
+}
+
 Xvals <- -3:3
+
 augBands.lw <- matrix(unlist(lapply(Xvals, aug.over.X.lw)), ncol=2, byrow=T)
 plot(X,Y, type="n")
 polygon(c(Xvals, rev(Xvals)),
