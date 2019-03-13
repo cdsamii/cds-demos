@@ -1,0 +1,128 @@
+---
+title: "Influence Functions"
+author: "Cyrus Samii"
+date: "3/13/2019"
+output: 
+  html_document:
+    number_sections: yes
+    df_print: paged
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Influence functions play an important role in semi-parametric theory. Informally, the influence function measures the influence of a single observation ona parameter estimate.  For good introductions, see Kennedy (2016, [arxiv](https://arxiv.org/abs/1510.04740)) and Kennedy (2017, [arxiv](https://arxiv.org/abs/1709.06418)).  Here I derive some influence functions for common estimators just to illustrate how the concept applies.
+
+# Influence function of OLS
+
+## Simulated data for the illustrations
+```{r}
+# Make data
+n <- 16
+x1 <- rnorm(n)
+x2 <- rnorm(n)
+e <- rnorm(n)
+y <- x1 + x2 + e
+X <- cbind(rep(1,n),x1,x2)
+
+# Functions for summation representation
+crossProdxx <- function(x){
+	as.matrix(unlist(x))%*%t(as.matrix(unlist(x)))
+}
+
+crossProdxy <- function(x){
+	xv <- unlist(x)
+	l.x <- length(xv)
+	as.matrix(xv[1:(l.x-1)])*xv[l.x]
+}
+```
+
+## Two representations of OLS
+
+We have matrix representation,
+$$
+\widehat{\beta} = (\mathbf{X}'\mathbf{X})^(-1)\mathbf{X}'Y
+$$
+as well as summation representation,
+$$
+\widehat{\beta} = \left(\sum_{i=1}^N X_iX_i' \right)^{-1}\sum_{i=1}^NX_iY_i
+$$
+```{r}
+# Matrix representation:
+solve(t(X)%*%X)%*%t(X)%*%y
+
+# Summation representations
+XX <- lapply(apply(X, 1, function(x){list(x)}),
+		crossProdxx)
+Xy <- lapply(apply(cbind(X,y), 1, function(x){list(x)}),
+		crossProdxy)
+Xe <- lapply(apply(cbind(X,e), 1, function(x){list(x)}),
+		crossProdxy)
+solve(Reduce("+", XX))%*%Reduce("+", Xy)
+```
+
+We can also write in terms of true $\beta$,
+$$
+\widehat{\beta} = \beta + \left(\sum_{i=1}^N X_iX_i' \right)^{-1}\sum_{i=1}^NX_ie_i,
+$$
+where $e_i$ is the population residual:
+```{r}
+as.matrix(c(0,1,1)) + solve(Reduce("+", XX))%*%Reduce("+", Xe)
+```
+
+## Deriving the influence function
+
+We work with
+\begin{align*}
+\sqrt{N}(\widehat{\beta} - \beta) & = \left(\frac{1}{N}\sum_{i=1}^N X_iX_i' \right)^{-1}\frac{1}{\sqrt{N}}\sum_{i=1}^NX_ie_i \\
+& = \frac{1}{\sqrt{N}}\sum_{i=1}^N \left(\frac{1}{N}\sum_{i=1}^N X_iX_i' \right)^{-1}X_ie_i \\
+& = \frac{1}{\sqrt{N}}\sum_{i=1}^N E[X_iX_i]^{-1}X_ie_i + o_N(1).
+\end{align*}
+
+
+Equivalence of the first and second lines:
+
+```{r}
+solve((1/n)*Reduce("+", XX))%*%((1/sqrt(n))*Reduce("+", Xe))
+
+(1/sqrt(n))*Reduce("+",lapply(Xe,
+		function(x){solve((1/n)*Reduce("+", XX))%*%x}))
+```
+
+So we have that the OLS influence function is given by,
+$$
+\phi_{OLS}(X) = E[XX]^{-1}Xe
+$$
+
+We can compute the empirical analogues of the influence function values for each observation:
+```{r}
+lapply(Xe,
+		function(x){solve((1/n)*Reduce("+", XX))%*%x})
+```
+
+OLS is a linear regular estimator, and so it abides by
+$$
+\sqrt{N}(\widehat{\beta} - \beta) \overset{p}{\rightarrow} \text{MVN}\left(\mathbf{0}, E[\phi_{OLS}(X)\phi_{OLS}(X)'] \right) = \text{MVN}\left(\mathbf{0}, E[XX]^{-1}E[XX'e^2]E[XX]^{-1} \right) .
+$$
+
+# Influence Function of IPW
+
+For a binary treatment variable, $A$, consider the Horvitz-Thompson type IPW estimator,
+$$
+\widehat{\psi} = \frac{1}{N}\sum_{i=1}^N\left(\frac{A_iY_i}{\pi(X_i)} - \frac{(1-A_i)Y_i}{1-\pi(X_i)} \right),
+$$
+
+where $\pi(\cdot)$ is the propensity score function.
+
+Now,
+$$
+\sqrt{N}(\widehat{\psi} - \psi) = \frac{1}{\sqrt{N}}\sum_{i=1}^N\left(\frac{A_iY_i}{\pi(X_i)} - \frac{(1-A_i)Y_i}{1-\pi(X_i)}  - \psi\right),
+$$
+which shows that the influence function for IPW is simply,
+$$
+\phi_{IPW} = \frac{AY}{\pi(X)} - \frac{(1-A)Y}{1-\pi(X)} - \psi.
+$$
