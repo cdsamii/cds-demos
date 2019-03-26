@@ -1,0 +1,45 @@
+---
+title: "Estimating Heterogeneous Treatment Effects"
+author: "Cyrus Samii"
+date: "3/26/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+This tutorial covers methods for estimating heterogenous treatment effects.  The focus here will be on point predictions, rather than inference on such predictions, given that the applications that we use work with summaries of the point predictions rather than the point predictions in and of themselves.  See Chernozhukov et al. (2017, arxiv) for a relevant discussion of this point. We are also interested in methods that work well when we entertain a high-dimensional covariate vector.  I say ``entertain'' because it may be that in fact the covariates that predict heterogeneity are few, but this is something that we do not know *a priori* and rather have at our disposal many covariates that we want to consider as candidates for predicting effect heterogeneity.  This leads us to machine learning approaches that use regularization to balance that ability to make very fine grained predictions with penalties for overfitting.
+
+# Algorithms
+
+We consider the following algorithms:
+
+- BART
+- Generalized Random Forests
+- Elastic Net on Minimum $gCV$ Basis Expansion
+
+
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

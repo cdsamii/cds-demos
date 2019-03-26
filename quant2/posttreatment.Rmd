@@ -1,0 +1,27 @@
+---
+title: "Post-treatment bias"
+author: "Cyrus Samii"
+date: "2/27/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Linear model example
+
+```{r}
+N <- 1000
+beta <- 1
+gamma <- 2
+alpha0 <- 0
+alpha1 <- 1
+Z <- rbinom(N, 1, .5)
+S <- Z + rnorm(N)
+Y <- beta*Z + gamma*S + rnorm(N)
+coef(lm(Y~Z))
+coef(lm(Y~Z+S))
+```
+
+
