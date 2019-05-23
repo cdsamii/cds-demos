@@ -1,0 +1,239 @@
+---
+title: "Omitted Variable Bias"
+author: "Cyrus Samii"
+date: "3/24/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(plm)
+```
+
+## Simple Case
+
+```{r}
+N <- 1000
+U <- rnorm(N, sd=sqrt(2))
+v <- rnorm(N)
+ep <- rnorm(N)
+rho <- 3
+gamma <- 2
+D <- 1 + gamma*U + v
+Y <- 2 + rho*D + U + ep
+lm(Y~D)
+rho+coef(lm(U~D))[2]
+rho + gamma*(var(U)/var(D))
+```
+
+## Fixed Effects
+
+### DAG 1
+```{r}
+N <- 1000
+T <- 4
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+D <-  U + rnorm(N*T)
+Y <- D + U + rnorm(N*T)
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```
+
+### DAG 2
+```{r}
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+Y <- D <- rep(NA, N*T)
+for(i in 1:N){
+  D[index==i][1] <- U[index==i][1] + rnorm(1)
+  for(j in 2:T){
+    D[index==i][j] <- .5*D[index==i][j-1] + U[index==i][1] + rnorm(1)
+  }
+}
+Y <- D + U + rnorm(N*T)
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```
+
+
+### DAG 3
+```{r}
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+Y <- D <- rep(NA, N*T)
+for(i in 1:N){
+  D[index==i][1] <- U[index==i][1] + rnorm(1)
+  Y[index==i][1] <- D[index==i][1] + U[index==i][1] + rnorm(1)
+  for(j in 2:T){
+    D[index==i][j] <- .5*D[index==i][j-1] + .5*Y[index==i][j-1] + U[index==i][1] + rnorm(1)
+    Y[index==i][j] <- D[index==i][j] + U[index==i][1] + rnorm(1)
+    }
+}
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```
+
+### DAG 4
+```{r}
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+Y <- D <- rep(NA, N*T)
+for(i in 1:N){
+  D[index==i][1] <- U[index==i][1] + rnorm(1)
+  Y[index==i][1] <- D[index==i][1] + U[index==i][1] + rnorm(1)
+  for(j in 2:T){
+    D[index==i][j] <- .5*D[index==i][j-1] + U[index==i][1] + rnorm(1)
+    Y[index==i][j] <- D[index==i][j] + .5*D[index==i][j-1] + U[index==i][1] + rnorm(1)
+    }
+}
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```
+
+
+### DAG 5
+```{r}
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+Y <- D <- rep(NA, N*T)
+for(i in 1:N){
+  D[index==i][1] <- U[index==i][1] + rnorm(1)
+  Y[index==i][1] <- D[index==i][1] + U[index==i][1] + rnorm(1)
+  for(j in 2:T){
+    D[index==i][j] <- .5*D[index==i][j-1] + U[index==i][1] + rnorm(1)
+    Y[index==i][j] <- D[index==i][j] + .5*Y[index==i][j-1] + U[index==i][1] + rnorm(1)
+    }
+}
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```
+
+
+
+### DAG 6
+```{r}
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+Y <- D <- rep(NA, N*T)
+for(i in 1:N){
+  D[index==i][1] <- U[index==i][1] + rnorm(1)
+  Y[index==i][1] <- D[index==i][1] + U[index==i][1] + rnorm(1)
+  for(j in 2:T){
+    D[index==i][j] <- U[index==i][1] + .5*Y[index==i][j-1] + rnorm(1)
+    Y[index==i][j] <- D[index==i][j] + .5*Y[index==i][j-1] + U[index==i][1] + rnorm(1)
+    }
+}
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```
+
+### DAG 7
+```{r}
+index <- 1:N%x%rep(1, T)
+U <- rnorm(N)%x%rep(1, T)
+ep <- Y <- D <- rep(NA, N*T)
+for(i in 1:N){
+  ep[index==i][1] <- rnorm(1)
+  D[index==i][1] <- U[index==i][1] + rnorm(1)
+  Y[index==i][1] <- D[index==i][1] + U[index==i][1] + rnorm(1)
+  for(j in 2:T){
+    ep[index==i][j] <- .5*ep[index==i][j-1] + rnorm(1)
+    D[index==i][j] <- U[index==i][1] + .5*Y[index==i][j-1] + rnorm(1)
+    Y[index==i][j] <- D[index==i][j] + .5*Y[index==i][j-1] + U[index==i][1] + ep[index==i][j]
+    }
+}
+tp <- rep(1, N)%x%1:T
+pData <- pdata.frame(data.frame(index, Y, D, tp), 
+                     index=c("index", "tp"),
+                     row.names=FALSE)
+feFit <- plm(Y~D, data = pData, model = "within")
+pData$LY <- lag(pData$Y, 1)
+pData$LD <- lag(pData$D, 1)
+feLDV <- plm(Y~D+LY, data = pData, model = "within")
+feLIV <- plm(Y~D+LD, data = pData, model = "within")
+feADL <- plm(Y~D+LY+LD, data = pData, model = "within")
+coef(lm(Y~D))[[2]]
+coef(feFit)
+coef(feLDV)
+coef(feLIV)
+coef(feADL)
+```

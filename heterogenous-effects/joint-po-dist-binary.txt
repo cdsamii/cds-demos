@@ -1,0 +1,12 @@
+COPAS, J. B. (1973). Randomization models for the matched and unmatched 2x2 tables. Biometrika, 60, 467-
+476.
+
+GADBURY, G.L., IYER, H.K., AND ALBERT, J.M. (2004). Individual treatment effects in randomized trials with
+binary outcomes. J. Statist. Plann. Inference. 121, 163-174.
+
+HECKMAN, J.J., SMITH, J.A, AND CLEMENTS, N. (1997). Making the most out of programme evaluations and
+social experiments: Accounting for heterogeneity in programme impacts. The Review of Economic Studies 64,
+487-535.
+
+ZHANG, Z., WANG, C., NIE, L. AND SOON, G. In press. Assessing the heterogeneity of treatment effects via
+potential outcomes of individual patients. J. Roy. Statist. Soc. Ser. C
