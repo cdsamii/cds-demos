@@ -29,7 +29,7 @@ source("~/documents/github/cds-demos/analysis-functions/analysis-functions.R")
 
 Below are notes on approaches to characterizing effect heterogeneity. The methods are reviewed in light of the goals in the paper, Gechter et al. (2019, [arxiv](https://arxiv.org/abs/1806.07016)).  It would be worth becoming familiar with that paper before reviewing what I have below.
 
-# Bounding the Extent of Effect Heterogeneity
+# Measuring the Extent of Effect Heterogeneity
 
 We will start with Heckman, Smith, and Clements (1997) examination of the binary outcomes case. Let's bring in the data from the Progresa to illustrate. We have the marginal enrollment distributions under treatment and control,
 
@@ -327,7 +327,7 @@ Based on these results, the maximal effect heterogeneity would be where `r round
 
 We can also compute these upper bounds on the extent of effect heterogeneity by strata.  The terms that we need to compute are the treatment and control enrollment indicator means ($P_{E\cdot}$ and $P_{\cdot E}$) in each stratum.
 
-```{r}
+```{r, echo=FALSE}
 fit_agesex <- lm(enrolled~treat*as.factor(age)*male,
                   data=progd)
 ageVec <- 6:16
@@ -342,7 +342,28 @@ agesexMeans <-cbind(predMat1[,c("age","male")],
               predict(fit_agesex, newdata=predMat1),
               predict(fit_agesex, newdata=predMat1)-predict(fit_agesex, newdata=predMat0))
 colnames(agesexMeans) <- c("Age","Male","Control","Treated","CATE")
+agesexMeans.d <- as.data.frame(agesexMeans)
+agesexMeans.d$PEN_ub <- apply(agesexMeans.d[,c("Control","Treated")],
+                                1,
+                                function(x){
+                                    min(x[2],1-x[1])
+                                })
+agesexMeans.d$PNE_ub <- apply(agesexMeans.d[,c("Control","Treated")],
+                                1,
+                                function(x){
+                                    min(1-x[2],x[1])
+                                })
+kable(round(agesexMeans.d, 2))
 ```
+
+
+The table above shows outcome means, the conditional average treatment effect (CATE), and then the upper bounds on the share of those induced to enroll ($EN$) and those induced not to enroll $NE$) for strata that distinguish between girls and boys aged between 6 and 16.  The $EN$ and $NE$ shares are the upper bounds of the shares of units within the given stratum for which there may be a treatment effect.  If effect monotonicity holds such that the treatment never induces anyone not to enroll, then the share of people within the given stratum that might be induced to enroll is equal to the value of the CATE.  
+
+When thinking about optimal treatment regimes, if the sum of $EN$ and $NE$ is small, then the potential for different treatment regimes to produce different outcome distributions is quite limited.  In our application, for younger children, such limits are quite apparent.  It is only for older youth, above the age of 12, where there is even the potential for there to be effect heterogeneity that is at all substantial.  Under effect monotonicity the limits are even tighter.
+
+## Miratrix et al.
+
+
 
 
 
