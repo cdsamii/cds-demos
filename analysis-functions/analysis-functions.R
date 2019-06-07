@@ -134,3 +134,46 @@ findNames <- function(x, dataIn){
 			function(a){substr(a, 1, nchar(x))})  == x]
 }
 
+# Getting CV-optimal RPart and useful output
+
+rpartOp <- function(formulaIn=NULL,
+                    methodIn=NULL,
+                    dataIn=NULL,
+                    xvalIn=NULL,
+                    minbucketIn=NULL,
+                    cp_incIN=NULL){
+  treeOut <- rpart(formulaIn,
+                   method=methodIn,
+                   data=dataIn,
+                   control=rpart.control(xval=xvalIn, 
+                                         minbucket=minbucketIn,
+                                         cp=cp_incIN),
+                   model=TRUE)
+  opcp <- treeOut$cptable[,1][which.min(treeOut$cptable[,4])]
+  optreeOut <- prune(treeOut, opcp)
+  resList <- list(tree=optreeOut, 
+                  varimp=100*(optreeOut$variable.importance/sum(optreeOut$variable.importance)))
+  return(resList)
+}
+
+# Plotting variable importance
+
+rpart_impplot <- function(treeIn=NULL,
+                          mainIn="",
+                          labelScale=NULL){
+  plot( treeIn$varimp,
+        length(treeIn$varimp):1,
+        xlim=c(0,100),
+        axes=F,
+        xlab="Importance measure",
+        ylab="",
+        main=mainIn,
+        pch=19)
+  axis(1, seq(0, 100, by=20))
+  axis(2, at=length(treeIn$varimp):1, 
+       labels=names(treeIn$varimp),
+       las=2,
+       cex.axis=labelScale)
+  abline(v=seq(0, 100, by=20), lty="dashed")
+  box()
+}

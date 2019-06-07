@@ -20,6 +20,7 @@ knitr::opts_knit$set(root.dir="~/documents/github/cds-demos/heterogenous-effects
 library(rio)
 library(knitr)
 library(Emcdf)
+library(causalTree)
 source("~/documents/github/cds-demos/analysis-functions/analysis-functions.R")
 ```
 
@@ -29,7 +30,7 @@ source("~/documents/github/cds-demos/analysis-functions/analysis-functions.R")
 
 ## Overview and Goals
 
-We first three types of high-dimensional methods for estimating heterogenous treatment effects: trees, random forests, and ``elastic net'' regularized regression.  The focus initially will be on point predictions, rather than inference on such predictions. This is because the applications that we use work with summaries of the point predictions rather than the point predictions in and of themselves.  See the section below on "features of CATES", referencing Chernozhukov et al. (2017, arxiv), for more on this point. 
+We consider three types of high-dimensional methods for estimating heterogenous treatment effects: trees, random forests, and ``elastic net'' regularized regression.  The focus initially will be on point predictions, rather than inference on such predictions. This is because the applications that we use work with summaries of the point predictions rather than the point predictions in and of themselves.  See the section below on "features of CATES", referencing Chernozhukov et al. (2017, arxiv), for more on this point. 
 
 We are also interested in methods that work well when we entertain a high-dimensional covariate vector.  I say "entertain" because it may be that, in fact, the covariates that predict heterogeneity are few, but this is something that we do not know *a priori,* and rather we have at our disposal many covariates that we want to consider as candidates for predicting effect heterogeneity.  This leads us to machine learning approaches that use regularization to balance that ability to make very fine grained predictions with penalties for overfitting.
 
@@ -61,15 +62,126 @@ colnames(misCheck) <- "Number missing"
 kable(misCheck)
 ```
 
+\clearpage
 # Trees
 
-We will start with a causal tree, as per Athey and Imbens.  We use their recommended causal tree (CT) splitting rule.  We do not use their honest splitting or CV rules because we are not interested in in-sample inference.
+## Trees for potential outcomes
 
-First is a test run, where we will work with a smaller version of the dataset and only age-sex:
+We start with using a regression tree to model potential outcomes.  This helps us to understand how the trees work and the settings that we need to fix. We just use all available covariates.  The `rpart()` function loads when we load the `causalTree` package. We will use 10-fold cross validation (CV) to estimated CV-error that we will minimize in selecting the complexity parameter to prune the tree. We evaluate covariate importance using the built-in evaluation function.  For a classification problem such that this, a given covariate's importance is based on the sum of standardized goodness of classification values for all splits that involves it.
+
+Here is the function:
 ```{r}
-library(causalTree)
-covShort <- c("ml_age","ml_male")
-mexShort <- mex_data[1:15000,c("enrolled", "treatment", covShort)]
+print(rpartOp)
+```
+
+And now results:
+
+```{r}
+mexFormula <- as.formula(paste("enrolled ~", paste(covs, collapse="+")))
+mex_data1 <- subset(mex_data, treatment==1)
+mex_data0 <- subset(mex_data, treatment==0)
+tree_y1 <- rpartOp(formulaIn=mexFormula,
+                    methodIn="class",
+                    dataIn=mex_data1,
+                    xvalIn=10,
+                    minbucketIn=2,
+                    cp_incIN=0)
+rpart.plot(tree_y1$tree)
+par(mar=c(4,10,2,2))
+rpart_impplot(treeIn=tree_y1, mainIn="Y1", labelScale=0.75)
+```
+
+```{r}
+tree_y0 <- rpartOp(formulaIn=mexFormula,
+                    methodIn="class",
+                    dataIn=mex_data0,
+                    xvalIn=10,
+                    minbucketIn=2,
+                    cp_incIN=0)
+rpart.plot(tree_y0$tree)
+par(mar=c(4,10,2,2))
+rpart_impplot(treeIn=tree_y0, mainIn="Y0", labelScale=0.75)
+```
+
+Looking at the results for the treated and control outcomes, we see that in both cases, the optimal trees gain predictive traction almost entirely by splitting on age and years of education. The other variables contribute to predictive accuracy only to a neglible degree.
+
+What are the implications of a covariate's importance for predicting potential outcomes when it comes to predicting effect heterogeneity?  We have
+$$
+E[Y(1)-Y(0)|X] = E[Y(1)|X] - E[Y(0)|X]
+$$
+by the linearity of expectations.  That being the case, if $E[Y(1)|X] = E[Y(1)]$ and $E[Y(0)|X] = E[Y(0)]$, then it must be that $E[Y(1)-Y(0)|X]= E[Y(1)-Y(0)]$. As such, being a variable that is predictive of either of the potential outcomes is a *necessary* condition for a covariate for it to be predictive of effects.  That said, variables that are predictive of potential outcomes may not be predictive of effects.  E.g., we could have that 
+$$
+E[Y(t)|X] = \alpha + \beta t + \gamma X 
+$$
+for $t=0,1$, in which case 
+$$
+E[Y(1)-Y(0)|X] = (\alpha + \beta + \gamma X) - (\alpha + \gamma X) = \beta,
+$$
+which does not depend on $X$. That said, a starting point for selecting variables to consider as contributors to effect heterogeneity would those that have some predictive relationship with potential outcomes. (Note that this is similar to what is done in Imai and Strauss 2011).
+
+Let us view the predicted potential outcome trees, plotting over the two covariates that seem the matter:
+```{r, echo=FALSE}
+mex_data$y1_tree <- predict(tree_y1$tree,
+                                  newdata=mex_data,
+                                  type="prob")[,"1"]
+mex_data$y0_tree <- predict(tree_y0$tree,
+                                  newdata=mex_data,
+                                  type="prob")[,"1"]
+mex_data$tau_tree <- mex_data$y1_tree - mex_data$y0_tree
+
+par(mfrow=c(3,4), mar=c(4,4,2,2))
+for(ageUp in 6:16){
+mexdataUp <- subset(mex_data, ml_age==ageUp)
+orderBy <- order(mexdataUp$ml_yrs_educ)
+plot(jitter(mexdataUp$ml_yrs_educ[orderBy]),
+     jitter(mexdataUp$y1_tree[orderBy]),
+     col="red",
+     xlab="Yrs educ",
+     ylab="Pr(enroll)",
+     ylim=c(0,1),
+     xlim=c(0,12),
+     main=paste0("Age",ageUp),
+     cex=.5)
+points(jitter(mexdataUp$ml_yrs_educ[orderBy]),
+     jitter(mexdataUp$y0_tree[orderBy]),
+     col="blue",
+     cex=.5)
+}
+```
+From these plots we can see that for lower age groups, the predicted means are very close, and so effects are basically zero.  Then, we have variation for higher age groups.  We can see all of this more clearly by plotting the estimated conditional treatment effects themselves:
+
+```{r, echo=FALSE}
+par(mfrow=c(3,4), mar=c(4,4,2,2))
+for(ageUp in 6:16){
+mexdataUp <- subset(mex_data, ml_age==ageUp)
+orderBy <- order(mexdataUp$ml_yrs_educ)
+plot(jitter(mexdataUp$ml_yrs_educ[orderBy]),
+     jitter(mexdataUp$tau_tree[orderBy]),
+     xlab="Yrs educ",
+     ylab="ATE hat",
+     ylim=c(-1,1),
+     xlim=c(0,12),
+     main=paste0("Age",ageUp),
+     cex=.5)
+}
+
+```
+
+While this approach is useful for getting a handle on effect heterogeneity, it is not optimized with respect to treatment effects per se.  We will turn to such methods next.
+
+\clearpage
+## Trees for effect heterogeneity
+
+We now turn to trees for effect heterogeneity. There are different ways to go about this.  
+
+
+
+We now turn to the "causal tree," as per Athey and Imbens.  We use their recommended causal tree (CT) splitting rule.  We do not use their honest splitting or CV rules because we are not interested in in-sample inference.
+
+First is a test run, where we will work with a smaller version of the dataset:
+```{r, eval=FALSE}
+covShort <- covs[1:10]
+mexShort <- mex_data[1:5000,c("enrolled", "treatment", covShort)]
 #mexFormula <- as.formula(paste("enrolled ~", paste(covs, collapse="+")))
 mexFormula <- as.formula(paste("enrolled ~", paste(covShort, collapse="+")))
 treeOut <- causalTree(mexFormula, 
@@ -79,16 +191,17 @@ treeOut <- causalTree(mexFormula,
                       split.Honest=F,
                       cv.option="CT",
                       cv.Honest=F,
-                      cp=0.0001) 
+                      cp=0.0001,
+                      split.alpha=1) 
 ```
 
 Checking the cross-validated prediction error (`xerror`) for the different depth trees:
-```{r}
+```{r, eval=FALSE}
 treeOut$cptable
 ```
 
 We can view cross-validated error minimizing tree:
-```{r}
+```{r, eval=FALSE}
 opcp <- treeOut$cptable[,1][which.min(treeOut$cptable[,4])]
 opTree <- prune(treeOut, opcp)
 rpart.plot(opTree)
