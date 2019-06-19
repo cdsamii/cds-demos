@@ -28,6 +28,40 @@ source("~/documents/github/cds-demos/analysis-functions/analysis-functions.R")
 
 # Estimating Conditional Treatment Effects (CATES) 
 
+## Setting
+
+Some notation following Chernozhukov et al.:
+
+- Potential outcomes, $Y(1), Y(0)$.
+- Covariates $X$.
+- Baseline conditional average (BCA): $b_0(X) = E[Y(0)|X]$.
+- CATE: $s_0(X) = E[Y(1)|X] - E[Y(0)|X]$.
+- CIA holds: $D \independent (Y(1), Y(0)) | X$.
+- Subvector of stratifying covariates, $X_1 \subseteq X$, such that
+- propensity score is $p(X)=P[D=1|X_1]$, with $0 < p_0 \le p(X) \le p_1 < 1$.
+- Observe $Y= DY(1) + (1-D)Y(0)$, in which case,
+- $Y = b_0(X) + Ds_0(X) + U$, with $E[U|X,D] = 0$, where
+- $b_0(X) = E[Y|D=0,X]$ and $s_0(X) = E[Y|D=1, X] - E[Y|D=0, X]$. CIA allows us to write $b_0$ and $s_0$ in terms of observables.
+- Observe $N$ iid draws of $(Y,X,D)$ with law $P$. Draws are indexed by $i=1,...,N$.
+
+A result to keep in mind (already noted in Athey and Imbens PNAS, I believe):
+
+Define
+$$
+H = H(D,X) = \frac{D-p(X)}{p(X)(1-p(X))}.
+$$
+Given the assumptions above, we have, 
+\begin{align*}
+E[YH|X] & = E\left[\frac{Y(D-p(X))}{p(X)(1-p(X))} \bigg| X \right]\\
+& = \frac{1}{p(X)(1-p(X))}E\left[ D(D-p(X))Y(1) + (1-D)(D-p(X))Y(0) | X \right]\\
+& = E[Y(1)|X] - E[Y(0)|X] \\
+& = s_0(X).
+\end{align*}
+
+We can use $YH$ as an "unbiased signal" about $s_0(X)$.  It is, however, a noisy signal, and so in using this, Chernozhukov et al. make adjustments (e.g., for their second BLP method).  Nonetheless, it does provide a target that one can use in trying to tune methods for estimating CATEs (see below the section on choosing an ML method).
+
+
+
 ## Overview and Goals
 
 We consider three types of high-dimensional methods for estimating heterogenous treatment effects: trees, random forests, and ``elastic net'' regularized regression.  The focus initially will be on point predictions, rather than inference on such predictions. This is because the applications that we use work with summaries of the point predictions rather than the point predictions in and of themselves.  See the section below on "features of CATES", referencing Chernozhukov et al. (2017, arxiv), for more on this point. 
@@ -85,7 +119,8 @@ tree_y1 <- rpartOp(formulaIn=mexFormula,
                     dataIn=mex_data1,
                     xvalIn=10,
                     minbucketIn=2,
-                    cp_incIN=0)
+                    cp_incIN=0,
+                    target="po")
 rpart.plot(tree_y1$tree)
 par(mar=c(4,10,2,2))
 rpart_impplot(treeIn=tree_y1, mainIn="Y1", labelScale=0.75)
@@ -97,7 +132,8 @@ tree_y0 <- rpartOp(formulaIn=mexFormula,
                     dataIn=mex_data0,
                     xvalIn=10,
                     minbucketIn=2,
-                    cp_incIN=0)
+                    cp_incIN=0,
+                    target="po")
 rpart.plot(tree_y0$tree)
 par(mar=c(4,10,2,2))
 rpart_impplot(treeIn=tree_y0, mainIn="Y0", labelScale=0.75)
@@ -111,9 +147,9 @@ E[Y(1)-Y(0)|X] = E[Y(1)|X] - E[Y(0)|X]
 $$
 by the linearity of expectations.  That being the case, if $E[Y(1)|X] = E[Y(1)]$ and $E[Y(0)|X] = E[Y(0)]$, then it must be that $E[Y(1)-Y(0)|X]= E[Y(1)-Y(0)]$. As such, being a variable that is predictive of either of the potential outcomes is a *necessary* condition for a covariate for it to be predictive of effects.  That said, variables that are predictive of potential outcomes may not be predictive of effects.  E.g., we could have that 
 $$
-E[Y(t)|X] = \alpha + \beta t + \gamma X 
+E[Y(d)|X] = \alpha + \beta d + \gamma X 
 $$
-for $t=0,1$, in which case 
+for $d=0,1$, in which case 
 $$
 E[Y(1)-Y(0)|X] = (\alpha + \beta + \gamma X) - (\alpha + \gamma X) = \beta,
 $$
@@ -172,148 +208,63 @@ While this approach is useful for getting a handle on effect heterogeneity, it i
 \clearpage
 ## Trees for effect heterogeneity
 
-We now turn to trees for effect heterogeneity. There are different ways to go about this.  
+We now turn to trees for effect heterogeneity. There are different ways to go about this.  The first is to use Horvitz-Thompson scaling. The next to construct a tree optimized with respect to effect heterogeneity.
 
+### Horvitz-Thompson scaling
 
+Recall the HT scaling result above. We can construct our unbiased signal of $s_0(X)$ as
+$$
+\hat{S}(X_i) = Y_i\frac{(D_i-p(X_i))}{p(X_i)(1-p(X_i))}. 
+$$
+We assume complete random assignment, in which case we have, $p(X_i) = p$. For the Progresa experiment:
+```{r}
+pUp <- mean(mex_data$treatment)
+pUp
+mex_data$Senrolled <- with(mex_data, enrolled*((treatment-pUp)/(pUp*(1-pUp))))
+```
+
+Then we fit the tree to this:
+```{r}
+mexFormula_S <- as.formula(paste("Senrolled ~", paste(covs, collapse="+")))
+tree_S <- rpartOp(formulaIn=mexFormula_S,
+                    methodIn="class",
+                    dataIn=mex_data,
+                    xvalIn=10,
+                    minbucketIn=2,
+                    cp_incIN=0,
+                    target="po")
+rpart.plot(tree_S$tree)
+par(mar=c(4,10,2,2))
+rpart_impplot(treeIn=tree_S, mainIn="S-HT", labelScale=0.6)
+```
+
+Pretty much the same story as what we had seen before.  
+
+### Causal Tree
 
 We now turn to the "causal tree," as per Athey and Imbens.  We use their recommended causal tree (CT) splitting rule.  We do not use their honest splitting or CV rules because we are not interested in in-sample inference.
-
-First is a test run, where we will work with a smaller version of the dataset:
-```{r, eval=FALSE}
-covShort <- covs[1:10]
-mexShort <- mex_data[1:5000,c("enrolled", "treatment", covShort)]
-#mexFormula <- as.formula(paste("enrolled ~", paste(covs, collapse="+")))
-mexFormula <- as.formula(paste("enrolled ~", paste(covShort, collapse="+")))
-treeOut <- causalTree(mexFormula, 
-                      data=mexShort,
-                      treatment=mexShort$treatment,
+```{r, eval=TRUE}
+tree_fx_tree <- causalTree(mexFormula, 
+                      data=mex_data,
+                      treatment=mex_data$treatment,
                       split.Rule="CT",
                       split.Honest=F,
                       cv.option="CT",
                       cv.Honest=F,
-                      cp=0.0001,
-                      split.alpha=1) 
+                      split.alpha=1,
+                      control=rpart.control(xval=10, 
+                                         minbucket=2,
+                                         cp=0.00005)) 
+opcp_fx <- tree_fx_tree$cptable[,1][which.min(tree_fx_tree$cptable[,4])]
+optreeOut_fx <- prune(tree_fx_tree, opcp_fx)
+rpart.plot(optreeOut_fx)
+
+tree_fx <- list(tree = optreeOut_fx,
+                varimp = 100*(optreeOut_fx$variable.importance/sum(optreeOut_fx$variable.importance)))
+par(mar=c(4,10,2,2))
+rpart_impplot(treeIn=tree_fx, mainIn="S-Causal Tree", labelScale=0.6)
 ```
 
-Checking the cross-validated prediction error (`xerror`) for the different depth trees:
-```{r, eval=FALSE}
-treeOut$cptable
-```
+Similar story as above.
 
-We can view cross-validated error minimizing tree:
-```{r, eval=FALSE}
-opcp <- treeOut$cptable[,1][which.min(treeOut$cptable[,4])]
-opTree <- prune(treeOut, opcp)
-rpart.plot(opTree)
-```
-
-
-
-
-
-# Random Forests
-
-Link to the Athey \& Wager paper: [JASA](https://www.tandfonline.com/doi/full/10.1080/01621459.2017.1319839)
-
-
-
-They start with the same HT scaling result, expressing it in a different (but equivalent) manner (keeping with the notation from above):
-$$
-E\left[ Y\left( \frac{D}{p(Z)} - \frac{1-D}{1-p(Z)} \right)\bigg| Z\right] = s_0(Z).
-$$
-
-Now I am going to move over to Aaron's code.
-
-
-# Elastic Net
-
-
-
-# Analyzing Features of CATES (Chernozhukov et al, 2017)
-
-Link to the paper: [arxiv](https://arxiv.org/abs/1712.04802)
-
-## Goals
-
-The goal is to learn about effect heterogeneity in a way that does not overfit and to provide "uniformly valid inference" on conditional average treatment effects (CATEs), or at least *features* of such CATEs. The approach is two-step: (i) build a machine learning (ML) proxy predictor of the CATE, then (ii) do inference on features of this proxy predictor. The features considered are first, best linear predictor (BLP), second, sorted group average effects (GATES), which are ATEs by heterogeneity groups, and third classification analysis (CLAN), which are the average effects of the most and least affected units. 
-
-## Setting
-
-Some notation:
-
-- Potential outcomes, $Y(1), Y(0)$.
-- Covariates $Z$.
-- Baseline conditional average (BCA): $b_0(Z) = E[Y(0)|Z]$.
-- CATE: $s_0(Z) = E[Y(1)|Z] - E[Y(0)|Z]$.
-- CIA holds: $D \independent (Y(1), Y(0)) | Z$.
-- Subvector of stratifying covariates, $Z_1 \subseteq Z$, such that
-- propensity score is $p(Z)=P[D=1|Z_1]$, with $0 < p_0 \le p(Z) \le p_1 < 1$.
-- Observe $Y= DY(1) + (1-D)Y(0)$, in which case,
-- $Y = b_0(Z) + Ds_0(Z) + U$, with $E[U|Z,D] = 0$, where
-- $b_0(Z) = E[Y|D=0,Z]$ and $s_0(Z) = E[Y|D=1, Z] - E[Y|D=0, Z]$. CIA allows us to write $b_0$ and $s_0$ in terms of observables.
-- Observe $N$ iid draws of $(Y,Z,D)$ with law $P$. Draws are indexed by $i=1,...,N$.
-
-A result to keep in mind (already noted in Athey and Imbens PNAS, I believe):
-
-_Horvitz-Thompson scaling_ 
-Define
-$$
-H = H(D,Z) = \frac{D-p(Z)}{p(Z)(1-p(Z))}.
-$$
-Given the assumptions above, we have, 
-\begin{align*}
-E[YH|Z] & = E\left[\frac{Y(D-p(Z))}{p(Z)(1-p(Z))} \bigg| Z \right]\\
-& = \frac{1}{p(Z)(1-p(Z))}E\left[ D(D-p(Z))Y(1) + (1-D)(D-p(Z))Y(0) | Z \right]\\
-& = E[Y(1)|Z] - E[Y(0)|Z] \\
-& = s_0(Z).
-\end{align*}
-
-We can use $YH$ as an "unbiased signal" about $s_0(Z)$.  It is, however, a noisy signal, and so in using this, Chernozhukov et al. make adjustments (e.g., for their second BLP method).  Nonetheless, it does provide a target that one can use in trying to tune methods for estimating CATEs (see below the section on choosing an ML method).
-
-## Methods
-
-For Chernozhukov et al., directly learning about $s_0$ in a generic way seems impossible at the moment  When $P$ is high dimensional, ML methods will not be consistent. Moreover, inference is complicated for adaptive estimators, particularly in trying to bound biases. Finally, tuning ML models is sort of free for all at the moment, with little to guide. 
-
-For these reasons Chernozhukov et al. focus on inference for low dimensional features of $s_0$.  First, partition the indices $\{1,...,N\}$ into two sets, $M$ and $A$ for "main" and "auxiliary", respectively, to yield a main sample, $\text{Data}_M$, and auxiliary sample, $\text{Data}_A$. Suppose for the time being that the two sets are about the same size. From sample $A$ obtain ML estimates of $b_0$ and $s_0$, to be called "proxy predictors":
-$$
-z \mapsto B(z) = B(z; \text{Data}_A) \text{ and } z \mapsto S(z) = S(z; \text{Data}_A).
-$$
-These proxies need not be consistent.  Then construct the features of interest (BLP, GATES, CLAN) in sample $M$.  Then do inference in a way that accounts for estimation uncertainty given sample $A$ and splitting uncertainty given the split into $M$ and $A$. Their precise method is to use many splits and then take the median of the feature estimates and then the medians of the random conditional confidence sets, adjusting them to account for splitting uncertainty. They refer to this inferential approach as "variational estimation and inference" (VEIN).
-
-BLP method 1 involves the following:
-
-Consider the weighted linear projection:
-$$
-Y = \alpha_1 + \alpha_2 B(Z) + \beta_1(D-p(Z)) + \beta_2(D-p(Z))(S(Z)-E[S(Z)]) + \epsilon,
-$$
-with weights,
-$$
-w(Z) = \frac{1}{p(Z)(1-p(Z))}.
-$$
-Chernozhulov et al. explain that "the interaction $(D-p(Z))(S-E[S])$ is orthogonal to $D-p(Z)$ under the weight $w(Z)$". This is due to LIE -- cf. p. 34 of the paper.
-
-I am going to leave the BLP alone for now. I can see how it may provide for a test of heterogeneity, but not sure how useful it is for our purposes.
-
-Sorted group ATE is quite relevant to us.  We want to put units into groups based on their predicted treatment effects.  E.g., suppose we want a partition,
-$$
-G-k = \{S \in I_k\}, k=1,...,K,
-$$
-where $I_k = [\ell_{k-1}, \ell_k)$ are intervals that divide the support of $S$.  Then, we want the conditional average effects within these bins,
-$$
-E[s_0(Z)|G_k], k=1,...,K.
-$$
-given the monotonicity restriction,
-$$
-E[s_0(Z)|G_1] \le ... \le E[s_0(Z)|G_K].
-$$
-
-## Choosing an ML method
-
-Options that they cover: (i) "ability to predict $YH$ using $BH$ and $S$" or (ii) "ability to predict $Y$ using $B$ and $(D-p(Z))(S-E[S])$ given $w(Z)$.   
-
-## Applications
-
-The application that is most relevant for us is the analysis of effect heterogeneity in the Morocco microfinance study.  In this case, $p(Z) = 1/2$ for everyone.  They try Random Forest, Elastic Net, Boosted Tree, and Neural Network, finding that the first two do best when judged using metrics geared toward the BLP and GATES analyses.
-
-
-
+Note that the CV-optimal tree and the variable importance ranking don't quite match in that the latter puts some weight on literacy.  This is because the variable importance measure looks at all trees where it is included in a split.  But presumably what it offers is redundant relative to something else that is included in the optimal tree.

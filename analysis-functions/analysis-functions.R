@@ -141,7 +141,10 @@ rpartOp <- function(formulaIn=NULL,
                     dataIn=NULL,
                     xvalIn=NULL,
                     minbucketIn=NULL,
-                    cp_incIN=NULL){
+                    cp_incIN=NULL,
+                    target=NULL,
+                    treatVar=NULL){
+  if(target == "po"){
   treeOut <- rpart(formulaIn,
                    method=methodIn,
                    data=dataIn,
@@ -149,6 +152,21 @@ rpartOp <- function(formulaIn=NULL,
                                          minbucket=minbucketIn,
                                          cp=cp_incIN),
                    model=TRUE)
+  }
+  if(target == "fx"){
+	treeOut <- causalTree(formulaIn, 
+                      data=dataIn,
+                      treatment=treatVar,
+                      split.Rule="CT",
+                      split.Honest=F,
+                      cv.option="CT",
+                      cv.Honest=F,
+                      split.alpha=1,
+                      model=TRUE,
+                      control=rpart.control(xval= xvalIn, 
+                                         minbucket= minbucketIn,
+                                         cp= cp_incIN)) 
+  }  
   opcp <- treeOut$cptable[,1][which.min(treeOut$cptable[,4])]
   optreeOut <- prune(treeOut, opcp)
   resList <- list(tree=optreeOut, 
