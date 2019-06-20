@@ -101,7 +101,9 @@ kable(misCheck)
 
 ## Trees for potential outcomes
 
-We start with using a regression tree to model potential outcomes.  This helps us to understand how the trees work and the settings that we need to fix. We just use all available covariates.  The `rpart()` function loads when we load the `causalTree` package. We will use 10-fold cross validation (CV) to estimated CV-error that we will minimize in selecting the complexity parameter to prune the tree. We evaluate covariate importance using the built-in evaluation function.  For a classification problem such that this, a given covariate's importance is based on the sum of standardized goodness of classification values for all splits that involves it.
+We start with using a regression tree to model potential outcomes.  This helps us to understand how the trees work and the settings that we need to fix. We just use all available covariates.  The `rpart()` function loads when we load the `causalTree` package. We will use 10-fold cross validation (CV) to estimated CV-error that we will minimize in selecting the complexity parameter to prune the tree. 
+
+We evaluate covariate importance using the built-in evaluation function.  For a classification problem such that this, a given covariate's importance is based on the sum of standardized goodness of classification values for all splits that involves it.
 
 Here is the function:
 ```{r}
@@ -140,6 +142,65 @@ rpart_impplot(treeIn=tree_y0, mainIn="Y0", labelScale=0.75)
 ```
 
 Looking at the results for the treated and control outcomes, we see that in both cases, the optimal trees gain predictive traction almost entirely by splitting on age and years of education. The other variables contribute to predictive accuracy only to a neglible degree.
+
+## Interpreting the `rpart` fit
+
+Here is a primer on what `rpart` is doing.  
+
+First, we can see a textual representation of the tree.  Child nodes are always $(2x, 2x+1)$ of a parent $x$.
+```{r}
+print(tree_y1$tree)
+```
+
+The detailed output is given by `summary`.  
+
+* At the top are the results of the CV assessment of error.  We use this to find the CV-optimal tree.   
+* Then we have the scaled (to sum to 100) variable importance scores for variables with scaled scores of at least one.
+* Then we have information on the candidate splits at each node going down the tree.  Here are details for the binary classification case for a node, which we will refer to as node $A$.
+  - We have number of observations in node $A$, a complexity parameter for this split, an indicator for what class is being predicted, and then expected loss is just $1-p_1(A)$, where $p_1(A) = \Pr[Y=1|A]$, and then the probability that a random unit would arrive at this node.
+  - Candidate splits are ordered on the basis of their contributions to increasing predictive accuracy. The resulting tree just uses the first of these. We have "primary" and "surrogate" splits listed. The "surrogates" are what one uses if the "primary" variable exhibits missing data.  If there is no missingness, one just uses the "primary".
+  - For each of the candidate splits, we have an "improve" measure.  These are what we add up to determine variable importance.  As per the `rpart` vignette, the "improve" measure equals $N$ times the change in the impurity.  The default impurity function for binary classification uses Gini ($f(p)=p(1-p)$) and thus defines impurity at node $A$ as
+$$
+I(A) = p_0(A)(1-p_0(A)) + p_1(A)(1-p_1(A)) = 2p_1(A)(1-p_1(A)).
+$$
+Let $C_{k}(A)$ be the optimal split at node $A$ for variable $k$. Then, the change in impurity after splitting at node $A$ on the basis of $C_{k}(A)$ is given by
+$$
+\Delta_I( C_{k}(A), A) = I(A) - \Pr[A_L(C_{k}(A))]*I(A_L(C_{d,k})) - \Pr[A_R(C_{d,k})]*I(A_R(C_{k}(A))). 
+$$
+Finally, the "improve" score is given by $N(A)\Delta_I( C_{k}(A), A)$.  We can show the calculation for the first and second nodes:
+```{r}
+# improve at node 1:
+N_A <- 10361
+I_A <- 2*0.79432487*(1-0.79432487)
+p_AL <- 2324/N_A
+I_AL <- 2*0.42211704*(1-0.42211704)
+p_AR <- 8037/N_A
+I_AR <- 2*0.90195347*(1-0.90195347)
+N_A*(I_A - p_AL*I_AL - p_AR*I_AR)
+
+# improve at node 2:
+N_A <- 2324
+I_A <- 2*0.42211704*(1-0.42211704)
+p_AL <- 1673/N_A
+I_AL <- 2*0.32994620*(1-0.32994620)
+p_AR <- 651/N_A
+I_AR <- 2*0.65898618*(1-0.65898618)
+N_A*(I_A - p_AL*I_AL - p_AR*I_AR)
+```
+We will see that this matches what we have below.  Then, the unscaled variable importance score for variable $k$ is the sum of these improve scores for any split in which the variable is used.  That is, if the optimal split at node A is $C(A)$, then
+$$
+VI_{k, unsc} = \sum_{A}I[C(A) = C_k(A)] \Delta_I( C_{k}(A), A).
+$$
+The scaled variable importance scores rescale everything so that they sum to 100:
+$$
+VI_{k, sc} = 100 \times \frac{VI_{k, unsc}}{\sum_k VI_{k, unsc}}.
+$$
+Okay, now we can look at the output for the control potential outcomes tree:
+```{r}
+summary(tree_y0$tree)
+```
+
+## Potential outcome heterogeneity and effect heterogeneity
 
 What are the implications of a covariate's importance for predicting potential outcomes when it comes to predicting effect heterogeneity?  We have
 $$

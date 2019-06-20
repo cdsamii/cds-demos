@@ -195,3 +195,45 @@ rpart_impplot <- function(treeIn=NULL,
   abline(v=seq(0, 100, by=20), lty="dashed")
   box()
 }
+
+# Fitting a GRF to estimate potential outcome response surfaces
+
+library(grf)
+
+grfFit <- function( dataIn,
+                    Y="Y",
+                    T="T",
+                    X=NULL,
+                    num.treesArg = 2000,
+                    set.seedArg = 111){
+        Y_tr = dataIn[,Y]  # outcome
+        D_tr = dataIn[,T]  # treatment 
+        X_tr = dataIn[,X] # Covariates
+        set.seed(set.seedArg)
+        e_hat <- regression_forest(X_tr,
+                                  D_tr, 
+                                  honesty=FALSE,
+                                  tune.parameters = TRUE,
+                                  num.trees=num.treesArg,
+                                  num.fit.trees = min(10, num.treesArg)) 
+        set.seed(set.seedArg)
+        mu_1 <-  regression_forest( X_tr[D_tr==1,],
+                                      Y_tr[D_tr==1],
+                                  honesty=FALSE,
+                                  tune.parameters = TRUE,
+                                  num.trees=num.treesArg,
+                                  num.fit.trees = min(10, num.treesArg))
+        set.seed(set.seedArg)
+        mu_0 <-  regression_forest( X_tr[D_tr==0,],
+                                      Y_tr[D_tr==0],
+                                  honesty=FALSE,
+                                  tune.parameters = TRUE,
+                                  num.trees=num.treesArg,
+                                  num.fit.trees = min(10, num.treesArg))
+       return(list(e_hat=e_hat, 
+                   mu_1 = mu_1, 
+                   mu_0 = mu_0))
+}
+
+
+
