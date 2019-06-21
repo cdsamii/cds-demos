@@ -205,35 +205,97 @@ grfFit <- function( dataIn,
                     T="T",
                     X=NULL,
                     num.treesArg = 2000,
-                    set.seedArg = 111){
+                    set.seedArg = 111,
+                    sample.fractionArg=.5,
+                    min.node.sizeArg=2){
         Y_tr = dataIn[,Y]  # outcome
         D_tr = dataIn[,T]  # treatment 
         X_tr = dataIn[,X] # Covariates
-        set.seed(set.seedArg)
         e_hat <- regression_forest(X_tr,
                                   D_tr, 
                                   honesty=FALSE,
-                                  tune.parameters = TRUE,
+                                  tune.parameters = TRUE,                         
+		                          min.node.size= min.node.sizeArg,
+		                          sample.fraction= sample.fractionArg,
                                   num.trees=num.treesArg,
-                                  num.fit.trees = min(10, num.treesArg)) 
-        set.seed(set.seedArg)
+                                  num.fit.trees = min(10, num.treesArg),
+                                  seed=set.seedArg) 
         mu_1 <-  regression_forest( X_tr[D_tr==1,],
                                       Y_tr[D_tr==1],
                                   honesty=FALSE,
                                   tune.parameters = TRUE,
+                         		  min.node.size= min.node.sizeArg,
+                         		  sample.fraction= sample.fractionArg,
                                   num.trees=num.treesArg,
-                                  num.fit.trees = min(10, num.treesArg))
-        set.seed(set.seedArg)
+                                  num.fit.trees = min(10, num.treesArg),
+                                  seed=set.seedArg)
         mu_0 <-  regression_forest( X_tr[D_tr==0,],
                                       Y_tr[D_tr==0],
                                   honesty=FALSE,
                                   tune.parameters = TRUE,
+                         		  min.node.size= min.node.sizeArg,
+                         		  sample.fraction= sample.fractionArg,
                                   num.trees=num.treesArg,
-                                  num.fit.trees = min(10, num.treesArg))
+                                  num.fit.trees = min(10, num.treesArg),
+                                  seed=set.seedArg)
        return(list(e_hat=e_hat, 
                    mu_1 = mu_1, 
                    mu_0 = mu_0))
 }
 
+# Ordered matrix of importance measures
 
+grfimp_orderedMat <- function(	forest_list= NULL,
+								tree_sizeVec=NULL,
+								covsIn = NULL,
+								depthArg=10){
+	varImpMat <- matrix(NA,
+					ncol=length(covsIn),
+					nrow=length(tree_sizeVec))
+	colnames(varImpMat) <- covsIn
+	rownames(varImpMat) <- tree_sizeVec
+	for(i in 1:length(tree_sizeVec)){
+  		varImpMat[i,] <- variable_importance(forest_list[[i]],
+  									max.depth=depthArg)
+	}
+	varImpAvg <- apply(	varImpMat,
+						2,
+						mean)
+	varImpMat.or <- varImpMat[, names(varImpAvg)[order(varImpAvg)]]
+	return(varImpMat.or)
+}
+
+
+# Multiple GRF importance plots
+
+grfimp_multiPlot <- function(	inputMat=NULL,
+								mfrowArg = c(1, nrow(inputMat)),
+								pointSize = .5,
+								ylabelSize=.5,
+								xlabelSize=.5
+								){
+	par(mfrow=mfrowArg)
+	for(i in 1:nrow(inputMat)){
+	plot(inputMat[i,],
+       	1:ncol(inputMat),
+       	pch=19, cex= pointSize,
+     	xlab="Importance", ylab="",
+     	axes=F,
+     	xlim=c(0,1),
+    	 main=paste(rownames(inputMat)[i], "Trees"))
+	axis(2,
+		at=1:ncol(inputMat),
+		labels=colnames(inputMat),
+		las=2,
+		cex.axis= ylabelSize)
+	axis(1,
+		at=seq(from=0,
+		to=1,
+		by=.1),
+		cex.axis= xlabelSize)
+	abline(h=(1:ncol(inputMat)),
+		lty="solid",
+		col="gray")
+	}
+}
 

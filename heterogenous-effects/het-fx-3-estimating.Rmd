@@ -47,6 +47,14 @@ We can proceed in a similar manner as above, looking at models for potential out
 
 We work with the "generalized random forest" algorithm of Athey et al.  
 
+We will see below that the forests do not prune trees as much as the regression tree method, presumably the guard against overfitting comes from the aggregation over trees, which are each fit on the basis of perturbed or sampled data.  
+
+## Some background on forests
+
+Hastie et al. *Elements...* present forests in conventional terms, as ensembles of trees.
+
+Athey et al. (AoS) take a different view, presenting them in terms of adaptive kernel estimators.
+
 ## Forests for potential outcomes
 
 
@@ -63,10 +71,26 @@ numTrees <- numTreeVec[i]
                          sample.fraction=.5,
                          min.node.size=2,
                          seed=111)
-if(i == 1){mu0      <- list(mu0_up)}
-if(i >  1){mu0[[i]] <- mu0_up}
+  if(i == 1){mu0      <- list(mu0_up)}
+  if(i >  1){mu0[[i]] <- mu0_up}
+
+  mu1_up <- regression_forest(X=mex_data1[,covs],
+                         Y=mex_data1[,"enrolled"],
+                         num.trees = numTrees,
+                         honesty=FALSE,
+                         tune.parameters = TRUE,
+                         num.fit.trees = numTrees,
+                         sample.fraction=.5,
+                         min.node.size=2,
+                         seed=111)
+  if(i == 1){mu1      <- list(mu1_up)}
+  if(i >  1){mu1[[i]] <- mu1_up}
 }
+
+
 ```
+
+### Variable importance
 
 The variable importance measure that they encode is one that is based on the number of times, across the trees in the forest, that a variable is used to split for different node depths up to some pre-specified depth.  For each variable, the frequency at each node depth is multipled by a depth weight, these weighted frequencies are added up, and then the total is standardized with respect to all of the other variables' sums to give a variable importance measure that sums to 1 across all of the variables.  Here we can see it in action:  
 
@@ -83,29 +107,80 @@ cbind(covs, round(var.importance, 2))
 
 Now we can look at variable importance over the different sized forests:
 ```{r}
-
-varImpMat <- matrix(NA, ncol=length(covs), nrow=length(numTreeVec))
-colnames(varImpMat) <- covs
-rownames(varImpMat) <- numTreeVec
-for(i in 1:length(numTreeVec)){
-  varImpMat[i,] <- variable_importance(mu0[[i]], max.depth=10)
-}
-varImpAvg <- apply(varImpMat, 2, mean)
-varImpMat.or <- varImpMat[, names(varImpAvg)[order(varImpAvg)]]
-
-plot(varImpMat.or[1,], 1:ncol(varImpMat.or), pch=19, cex=.25)
-for(i in 2:length(numTreeVec)){
-points(varImpMat.or[i,],
-       (1:ncol(varImpMat.or))-(i-1)/10,
-       pch=19, cex=.25)
-}
-abline(h=(1:ncol(varImpMat.or))+.5, lty="dashed", col="gray")
-
+varImpMat0.or <- grfimp_orderedMat(forest_list = mu0,
+                  tree_sizeVec = numTreeVec,
+                  covsIn = covs)
+varImpMat1.or <- grfimp_orderedMat(forest_list = mu1,
+                  tree_sizeVec = numTreeVec,
+                  covsIn = covs)
+grfimp_multiPlot(varImpMat0.or)
+grfimp_multiPlot(varImpMat1.or)
 ```
 
+We note that this variable importance measure is basically a counting exercise, and is motivated by the fact that the trees that constitute the forests develop splits in a manner that maximizes discrimination at each step.  That said, the scaling of the measure is not guaranteed to be proportional to the variance explained by each variable.  Something like what we had for trees may be difficult to implement, however there are permutation/bootstrap based alternatives that one could use---cf. Su et al. (2009).  
+
+### Iterated estimation and screening covariates
+
+In an applied paper, Athey and Wager (2019) also propose iteration to first see in a generalized estimation problem the forest picks out as important, and then in a second iteration constraining the estimation to work only with covariates that pass some importance threshold after the first pass.  We can do this here for the large forest (2000 trees).
+
+```{r}
+covs.short0 <- colnames(varImpMat0.or)[varImpMat0.or[4,]>.01]
+covs.short1 <- colnames(varImpMat1.or)[varImpMat1.or[4,]>.01]
+
+mu0_short <- regression_forest(X=mex_data0[,covs.short0],
+                         Y=mex_data0[,"enrolled"],
+                         num.trees = 2000,
+                         honesty=FALSE,
+                         tune.parameters = TRUE,
+                         num.fit.trees = 10,
+                         sample.fraction=.5,
+                         min.node.size=2,
+                         seed=111)
+mu1_short <- regression_forest(X=mex_data1[,covs.short1],
+                         Y=mex_data1[,"enrolled"],
+                         num.trees = 2000,
+                         honesty=FALSE,
+                         tune.parameters = TRUE,
+                         num.fit.trees = 10,
+                         sample.fraction=.5,
+                         min.node.size=2,
+                         seed=111)
+cbind(covs.short0, variable_importance(mu0_short, max.depth=10))
+cbind(covs.short1, variable_importance(mu1_short, max.depth=10))
+```
+
+### Summary conclusions
+
+Not clear that doing the forests with small number of trees is really adding anything.  Better to just stick with the large number (e.g., default 2000) and then contrast to the one-tree case.  The larger is motivated by the idea of the adaptive kernel estimation, which surely is better with many trees than a few.
+
+Below we will stick with that.
 
 ## Forest for effect heterogeneity
 
+Athey et al. (AoS) propose methods to estimate causal effects that first perform what Chernozhukov et al. refer to as "Neyman orthogonalization" --- that is, partialing out variation in treatment and outcome due to covariates, and then running the forest on these residualized treatment and outcome values.  This contributes to efficiency.  This is implemented automatically in the `causal_forest` package.  We will also use the pre-screening algorithm that was discussed above. 
+
+```{r}
+# Start by just running on the defaults:
+tauX_raw <- causal_forest(X = mex_data[,covs],
+                      Y = mex_data[,"enrolled"],
+                      W = mex_data[,"treatment"],
+                      seed = 111)
+
+# Now prune:
+covs_short_tauX <- covs[variable_importance(tauX_raw) > .01]
+
+# Now estimate again:
+tauX <- causal_forest(X = mex_data[,covs_short_tauX],
+                      Y = mex_data[,"enrolled"],
+                      W = mex_data[,"treatment"],
+                      seed = 111)
+cbind(covs_short_tauX, variable_importance(tauX))
+```
+Similar story as what we've seen all along.
+
+## Comparing conditional treatment effects estimated via PO modeling versus Causal Tree
+
+The Causal Tree is optimized with respect to effect heterogeneity, which is what we want.  Let's see if this results in any noticeable differences as compared to potential outcome modeling.
 
 
 
