@@ -157,7 +157,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div id="circle-averages" class="section level3">
 <h3>Circle averages</h3>
 <p>We define a circle average function, Correspondingly, the circle average would take the form, <span class="math display">\[
-\mu_i(a; d) = \frac{1}{| \{x:d_i(x) =d \}|}\int_{x \in  \{x:d_i(x) =d \}} a_x
+\mu_i(a; d) = \frac{1}{| \{x:d_i(x) =d \}|}\int_{x \in  \{x:d_i(x) =d \}} a_x dx
 \]</span> where <span class="math inline">\(\{x:d_i(x) =d \}\)</span> defines a circle with radius <span class="math inline">\(d\)</span> around intervention node <span class="math inline">\(i\)</span> and <span class="math inline">\(|\{x:d_i(x) =d \}|\)</span> is the length of this circle.</p>
 <p>In cases where observation points are discrete, then the circle average function would use a coarsened distance operator, <span class="math display">\[
 d_i(x; \kappa) = \lfloor \| x(i) - x \| \times 10^{\kappa}+0.5 \rfloor \times 10^{-\kappa}
