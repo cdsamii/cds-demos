@@ -1,0 +1,29 @@
+---
+title: "Hierarchical Random Forest"
+author: "Cyrus Samii"
+date: "9/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+
+This presentation benefits from a few sources:
+
+- "Mixed Effects Random Forests in Python" by Sourav Dey [link](https://towardsdatascience.com/mixed-effects-random-forests-6ecbb85cb177)
+- Others...
+
+Data generating processes are often hierarchical.  Students take tests after learning from a given teacher.  There are presumably teacher effects such that students with different teachers have different ways of handling the test.  Suppose we want to model student test scores.  How to account for the fact that there is likely heterogeneity by class?  We could just create a separate model for each teacher's class.  But that might result in sparse data for each model.  We could just ignore the fact that students are broken up into different classes, but that would likely yield a model that fits poorly within any given class.  An hierarchical, or mixed effects, model tries to split the difference between these two approaches.
+
+Mixed effects linear regressions are a classical way to tackle such problems.  Suppose we have student $i$ in class $c$.  Then we could write,
+$$
+Y_{ic} = \alpha_{\ell} +  X_{ic}'\beta_{\ell} + (\phi_{\ell, c} + Z_{ic}'\gamma_{\ell, c}) + \epsilon_{\ell, ic}
+$$
+where the "random effects"" components are the terms in the parentheses.  We could loosen this somewhat, e.g., 
+$$
+Y_{ic} = \alpha +  f(X_{ic}) + (\phi_c + Z_{ic}'\gamma_c) + \epsilon_{ic}
+$$
+where we replace the linear fixed effects specification with some generic function $f(\cdot)$.  
