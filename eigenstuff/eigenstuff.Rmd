@@ -1,0 +1,214 @@
+---
+title: "Eigendecomposition"
+author: "Cyrus Samii"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Eigendecomposition of covariance matrix and principal components
+
+Given an $n \times n$ covariance matrix $S$, the eigendecomposition (a.k.a. spectral decomposition) yields
+$$
+S = Q \Lambda Q^{-1},
+$$
+where $Q$ is a $n \times n$ square matrix of orthogonal columns whose $i$th column is *eigenvector* $q_i$ of $S$, and $\Lambda$ is a diagonal matrix of *eigenvalues*, $\Lambda_{ii} = \lambda_i$. 
+
+The orthogonal *eigenvectors* of the covariance matrix give directions of the principal components.  *Eigenvalues* of the covariance matrix give the length along the principal component axes, and therefore correspond to the "amount of variance explained" along each axis.
+
+Multiplying the data by the eigenvector matrix will rotate the data about the origin such that the resulting matrix will have its principal components aligned with the original axes. The covariance matrix of the transformed data will have variances equal to the eigenvalues of the original covariance matrix and will have covariances zero (as we have rotated the data such that they are arrayed orthogonally).
+
+Here is a demonstration with data in 2 dimensions $(x,y)$: 
+
+```{r}
+n <- 1000
+x <- 1+rnorm(n)
+y <- 1+ .5*x + rnorm(n)
+axrange=range(c(x,y))
+
+par(pty="s")
+plot(x,y, 
+		pch=19, 
+		cex=.2, 
+		col="gray",
+		xlim=axrange,
+		ylim=axrange)
+S <- cov(cbind(x,y))
+print(S)
+```
+
+Now perform the eigendecomposition:
+
+```{r}
+E <- eigen(S)
+print(E)
+print(E$vectors[,1]%*%E$vectors[,2])
+```
+
+Extract the eigenvectors and eigenvalues, and use them to orient (eigenvectors) and scale (eigenvalues) the principal components:
+```{r}
+e1 <- E$vectors[,1]*E$values[1]
+e2 <- E$vectors[,2]*E$values[2]
+
+par(pty="s")
+plot(x,y, 
+		pch=19, 
+		cex=.2, 
+		col="gray",
+		xlim=axrange,
+		ylim=axrange)
+points(c(mean(x), mean(x)+e1[1]),
+		c(mean(y), mean(y)+e1[2]) , 
+		type="l", col="blue")
+points(c(mean(x), mean(x)+e2[1]),
+		c(mean(y), mean(y)+e2[2]) , 
+		type="l", col="red")
+```
+
+
+Transform data to orient it along the principal component axes:
+
+```{r}
+W <- cbind(x,y)
+Wt <- W%*%E$vectors
+
+par(pty="s", mfrow=c(1,2))
+plot(x,y, 
+		pch=19, 
+		cex=.2, 
+		col="gray",
+		xlim=axrange,
+		ylim=axrange)
+plot(Wt, col="green", pch=19, cex=.2,
+     xlim=axrange,
+		ylim=axrange)
+
+St <- cov(Wt)
+Et <- eigen(St) 
+
+print(St)
+print(Et)
+```
+
+So you can think of the eigenvectors as what you would need to transform your data so that it is arranged orthogonally on the axes, in which case the eigenvalues are the variances along these axes. 
+
+Here is the usual definition of an eigenvector:
+```{r}
+print(E$vectors[,1]/S%*%E$vectors[,1])
+print(E$vectors[,2]/S%*%E$vectors[,2])
+```
+
+So, we see that these eigenvectors do not change direction. just their scaling, when multiplied by $S$.  So, $S$ does not rotate these vectors.  Their direction is invulnerable to $S$.  
+
+# Eigendecomposition of transition matrix and page rank
+
+Suppose the following transition matrix between 3 pages:
+
+```{r}
+P <- 	cbind(
+		c(.75, .2, .05),
+		c( .6, .1, .3),
+		c( .5, .25,.25))	
+```
+
+It's pretty clear that page 1 is really popular, while the latter two are sort of even.
+
+Suppose here is where we start
+```{r}
+now <- c(1,0,0)
+```
+
+Here is where we can expect to go:
+```{r}
+print(P%*%now)
+```
+
+Do it over and over:
+```{r}
+print(P%*%P%*%now)
+print(P%*%P%*%P%*%now)
+```
+
+You will settle on a limit:
+```{r}
+limP <- P%*%P%*%P%*%P%*%P%*%P%*%P%*%P%*%P%*%P%*%now
+print(limP)
+```
+
+Normalize it:
+```{r}
+print(limP/sqrt(sum(limP^2)))
+```
+
+Eigendecomposition:
+
+```{r}
+EP <- eigen(P)
+print(EP)
+```
+So the first eigenvector gives the normalized limit of the distribution over pages induced by the transition matrix.
+
+Transform back to the limit:
+```{r}
+print(EP$vectors[,1]/sum(EP$vectors[,1]))
+```
+
+# Eigendecomposition and Network Graphs
+
+With page rank, the transition matrix was essentially a graph, where low values imply lots of friction (with a 0 meaning no way to go between the associated vertices).  The eigenvectors will tell you how things settle over that graph if you let things flow till you get a steady state.
+
+# QR algorithm for eigendecomposition
+
+The QR algorithm is one way to do eigendecomposition.
+
+First, let's talk about QR.  We decompose as
+$$
+S = QR,
+$$
+where Q is an orthogonal matrix and $R$ is an upper triangular matrix. As an orthogonal matrix, we have,
+$$
+Q^T Q = I,
+$$
+where $I$ is the identity matrix.
+
+You can QR using Gram-Schmidt, which finds an orthogonal basis for a non-orthogonal $S$. Eg., if
+$$
+S = ( \begin{array}{ccc}s_1 & ... & s_n \end{array} ),
+$$
+then you can normalize the first column as,
+$$
+e_1 = \frac{s_1}{||s_1||},
+$$
+and then proceed to
+$$
+e_2 = \frac{a_2 - (a_2 \cdot e_1)e_1}{||a_2 - (a_2 \cdot e_1)e_1||},
+$$
+and
+$$
+e_3 = \frac{a_3 - (a_3 \cdot e_1)e_1- (a_3 \cdot e_2)e_2}{||a_3 - (a_3 \cdot e_1)e_1- (a_3 \cdot e_2)e_2||},
+$$
+and so on, where
+$$
+|| v || = \sqrt{\sum_{j=1}^n v_i^2}.
+$$
+Then,
+$$
+S = ( \begin{array}{ccc}e_1 & ... & e_n \end{array} )\left( \begin{array}{cccc} a_1 e_1 & a_2 e_1 & ... & a_n e_1\\
+0 & a_2 e_1 & ... & a_n e_2 \\
+\vdots & \vdots & \vdots & \vdots\\
+0 & 0 & ... & a_n e_n
+\end{array}\right),
+$$
+
+Now the QR algorithm to compute the eigenvalues proceeds as follows. Set $S_0 = S$. Then we have $S_0 = Q_0 R_0$.  We proceed by computing
+$$
+S_1 = R_0 Q_0, ..., S_k = R_kQ_k. 
+$$
+Note that
+$$
+S_{k+1} = S_kQ_k = Q_k^{-1}Q_k R_k Q_k = Q_k^{-1} S_k Q_k = Q_K^T S_k Q_k,
+$$
+where the last equality is because $Q_k$ is an orthogonal matrix for which $Q_k^{-1} = Q_k^T$.  Under suitable conditions the $A_k$ converge to a triangular matrix, for which the eigenvalues are on the diagonal. These are the eigenvalues of $A$. 
